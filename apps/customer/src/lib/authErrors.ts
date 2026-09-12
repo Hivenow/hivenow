@@ -17,6 +17,9 @@ const MESSAGES: Record<string, string> = {
   "auth/popup-closed-by-user": "Sign-in was cancelled.",
   "auth/cancelled-popup-request": "Sign-in was cancelled.",
   "auth/popup-blocked": "Your browser blocked the sign-in popup. Please allow popups and try again.",
+  "auth/operation-not-supported-in-this-environment": "Sign-in isn't supported here. Please try again in your browser.",
+  "auth/unauthorized-domain": "Sign-in isn't available from this address right now. Please contact support.",
+  "auth/account-exists-with-different-credential": "This email is already registered with a different sign-in method. Try signing in with your mobile number.",
 };
 
 const DEFAULT_MESSAGE = "Something went wrong. Please try again.";

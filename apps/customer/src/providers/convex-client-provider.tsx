@@ -7,11 +7,23 @@ import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
 // Resilient check against missing, empty, or fallback strings
-const isConfigInvalid = 
-  !convexUrl || 
-  convexUrl === "undefined" || 
-  convexUrl.trim() === "" || 
+const isConfigInvalid =
+  !convexUrl ||
+  convexUrl === "undefined" ||
+  convexUrl.trim() === "" ||
   convexUrl.includes("placeholder-url.convex.cloud");
+
+/**
+ * Module-level singleton — created once, survives all re-renders.
+ *
+ * Constructing this inside the component body instead means every re-render of
+ * this provider (it sits at the root layout, so every route navigation) builds a
+ * new client with a new WebSocket and an auth handshake starting from zero.
+ * Every query returns undefined again during that window, which SessionContext
+ * reads as "signed out" — the customer gets bounced to sign-in while their
+ * Firebase session is still perfectly valid.
+ */
+const convex = isConfigInvalid ? null : new ConvexReactClient(convexUrl!);
 
 import { SessionProvider } from "@/context/SessionContext";
 import { LocationProvider } from "@/context/LocationContext";
@@ -51,12 +63,9 @@ function ConvexConfigErrorScreen() {
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-  if (isConfigInvalid) {
+  if (!convex) {
     return <ConvexConfigErrorScreen />;
   }
-
-  // Safe to initialize now that we have a valid absolute URL
-  const convex = new ConvexReactClient(convexUrl);
 
   return (
     <ConvexProviderWithAuth client={convex} useAuth={useFirebaseAuth}>

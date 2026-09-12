@@ -5,8 +5,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { auth, googleProvider } from "@/lib/firebase";
-import { signInWithPopup, signOut, browserPopupRedirectResolver } from "firebase/auth";
+import { getClientAuth, googleProvider } from "@/lib/firebase";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, browserPopupRedirectResolver } from "firebase/auth";
 import { authPerfLog, logAuthFlowTotalOnce } from "@/lib/authPerf";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "@/lib/safeStorage";
 
@@ -42,6 +42,26 @@ export interface SessionContextType extends SessionState {
   setGuestMode: (enabled: boolean) => void;
 }
 
+/** True when the app is running as an installed PWA rather than a normal browser tab. */
+function isStandalonePWA(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true
+  );
+}
+
+/**
+ * Popup failures worth retrying as a redirect. Deliberately excludes
+ * auth/popup-closed-by-user and auth/cancelled-popup-request: those mean the shopper
+ * chose to back out, and navigating them away to Google anyway would override that.
+ */
+const REDIRECT_FALLBACK_CODES = new Set([
+  "auth/popup-blocked",
+  "auth/operation-not-supported-in-this-environment",
+]);
+
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -63,6 +83,26 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     const savedGuest = safeGetItem("hive_guest") === "true";
     setIsGuest(savedGuest);
+  }, []);
+
+  // Completes a Google sign-in that went through signInWithRedirect. Lives here rather than on
+  // the sign-in page because the shopper returns to whichever page started the flow.
+  useEffect(() => {
+    getRedirectResult(getClientAuth())
+      .then((result) => {
+        if (!result?.user) return;
+        authPerfLog("Google redirect sign-in completed");
+        setIsGuest(false);
+        safeRemoveItem("hive_guest");
+      })
+      .catch((err) => {
+        // Expected on any cold load where no redirect was in flight — not a failure.
+        const code = (err as { code?: string } | null)?.code;
+        if (code && ["auth/no-current-user", "auth/null-user", "auth/argument-error"].includes(code)) {
+          return;
+        }
+        console.error("Google redirect sign-in failed:", err);
+      });
   }, []);
 
   // Sync Firebase user with Convex users table immediately upon login
@@ -132,12 +172,36 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const loginWithGoogle = async (credential?: string): Promise<any> => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+    const auth = getClientAuth();
+
+    // Guest mode is cleared before any redirect, because signInWithRedirect navigates away
+    // and nothing after it in this function gets to run.
+    const clearGuest = () => {
       setIsGuest(false);
       safeRemoveItem("hive_guest");
+    };
+
+    // An installed PWA gets its own window, and on Android the sign-in popup opens in a Custom
+    // Tab with a separate storage partition — the session lands somewhere this context cannot
+    // read, so the shopper appears never to have signed in. Redirect keeps the whole flow in
+    // the PWA's own storage.
+    if (isStandalonePWA()) {
+      clearGuest();
+      await signInWithRedirect(auth, googleProvider);
+      return { redirecting: true };
+    }
+
+    try {
+      const res = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+      clearGuest();
       return { token: "firebase", userId: res.user.uid, role: "customer" };
     } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code && REDIRECT_FALLBACK_CODES.has(code)) {
+        clearGuest();
+        await signInWithRedirect(auth, googleProvider);
+        return { redirecting: true };
+      }
       console.error("Firebase Google SignIn error:", err);
       throw err;
     }
@@ -145,7 +209,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const logout = async () => {
     try {
-      await signOut(auth);
+      await signOut(getClientAuth());
       setIsGuest(false);
       safeRemoveItem("hive_guest");
     } catch (err) {

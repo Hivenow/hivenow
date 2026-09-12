@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionStore } from "@/context/SessionContext";
-import { auth } from "@/lib/firebase";
+import { getClientAuth } from "@/lib/firebase";
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import { HiveLogo } from "@/components/shared/HiveLogo";
 import { ArrowRight, Phone, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
@@ -89,7 +89,7 @@ export function FirebaseAuthCard({
       container.innerHTML = "";
     }
     try {
-      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(getClientAuth(), "recaptcha-container", {
         size: "invisible",
         callback: () => {
           console.log("Recaptcha verified");
@@ -138,7 +138,7 @@ export function FirebaseAuthCard({
       authPerfLog("reCAPTCHA verifier constructed (challenge itself runs inside the next call)");
       const formattedPhone = `+91${phone}`;
       authPerfLog(isResend ? "Firebase signInWithPhoneNumber starting (resend)" : "Firebase signInWithPhoneNumber starting (includes reCAPTCHA challenge + SMS request)");
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, verifier);
+      const confirmation = await signInWithPhoneNumber(getClientAuth(), formattedPhone, verifier);
       authPerfLog("Firebase signInWithPhoneNumber returned");
       setConfirmationResult(confirmation);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
