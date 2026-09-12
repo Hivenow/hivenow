@@ -24,6 +24,16 @@ function isPWA(): boolean {
   );
 }
 
+/**
+ * Popup failures worth retrying as a redirect. Deliberately excludes
+ * auth/popup-closed-by-user and auth/cancelled-popup-request: those mean the partner chose to
+ * back out, and navigating them away to Google anyway would override that.
+ */
+const POPUP_REDIRECT_FALLBACK_CODES = new Set([
+  "auth/popup-blocked",
+  "auth/operation-not-supported-in-this-environment",
+]);
+
 /** Detect if running inside a Capacitor native app (Android/iOS WebView) */
 function isCapacitor(): boolean {
   if (typeof window === "undefined") return false;
@@ -78,12 +88,21 @@ export function SellerAuthProvider({ children }: { children: React.ReactNode }) 
       }
     }
 
-    // 2. Web & PWA (Desktop / Mobile Chrome / Standalone PWA) -> Popup
+    // 2. Installed PWA -> redirect. A popup opened from an installed app lands in a context
+    // whose storage this app cannot read — its own cookie container on iOS, a Custom Tab on
+    // Android — so the session arrives somewhere invisible and the partner appears never to
+    // have signed in. Redirect keeps the whole flow in the app's own storage; the return leg
+    // is completed by getRedirectResult on the sign-in page.
+    if (isPWA()) {
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+
+    // 3. Normal browser tab -> popup, with redirect as the fallback when the browser refuses it.
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
-      if (err.code === "auth/popup-blocked") {
-        // Popup blocked by browser policy — fall back to redirect
+      if (err?.code && POPUP_REDIRECT_FALLBACK_CODES.has(err.code)) {
         await signInWithRedirect(auth, googleProvider);
         return;
       }

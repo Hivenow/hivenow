@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=apps/admin"],
       "port": 3001
+    },
+    {
+      "name": "boutique",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=apps/boutique"],
+      "port": 3002
     }
   ]
 }
