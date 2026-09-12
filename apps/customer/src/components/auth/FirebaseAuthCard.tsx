@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionStore } from "@/context/SessionContext";
-import { getClientAuth } from "@/lib/firebase";
+import { getClientAuth, isAppleSignInEnabled } from "@/lib/firebase";
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
 import { HiveLogo } from "@/components/shared/HiveLogo";
 import { ArrowRight, Phone, ShieldCheck, CheckCircle2, AlertCircle } from "lucide-react";
@@ -30,7 +30,7 @@ export function FirebaseAuthCard({
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect_url") || "/";
   
-  const { loginWithGoogle, isAuthenticated } = useSessionStore();
+  const { loginWithGoogle, loginWithApple, isAuthenticated } = useSessionStore();
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -101,26 +101,36 @@ export function FirebaseAuthCard({
     return (window as any).recaptchaVerifier;
   };
 
-  const handleGoogleSignIn = async () => {
+  // Google and Apple differ only in which context method they call, so they share this.
+  const handleFederatedSignIn = async (
+    providerLabel: "Google" | "Apple",
+    signIn: () => Promise<any>
+  ) => {
     markAuthFlowStart();
-    authPerfLog("Google sign-in pressed");
+    authPerfLog(`${providerLabel} sign-in pressed`);
     setLoading(true);
     setError(null);
     try {
-      await loginWithGoogle();
-      authPerfLog("Firebase Google sign-in popup completed");
+      const result = await signIn();
+      // On the redirect path the browser is already navigating away; routing here would race
+      // that navigation, and the return leg is completed by getRedirectResult in SessionContext.
+      if (result?.redirecting) return;
+      authPerfLog(`Firebase ${providerLabel} sign-in popup completed`);
       if (onSuccess) {
         onSuccess();
       } else {
         router.push(redirectUrl);
       }
     } catch (err: any) {
-      console.error("Google login error:", err);
+      console.error(`${providerLabel} login error:`, err);
       setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGoogleSignIn = () => handleFederatedSignIn("Google", loginWithGoogle);
+  const handleAppleSignIn = () => handleFederatedSignIn("Apple", loginWithApple);
 
   // Shared by the initial "Send OTP" and "Resend OTP" — Firebase's call is identical either way;
   // only what triggered it (and how the result is announced) differs.
@@ -260,6 +270,23 @@ export function FirebaseAuthCard({
             <span>Continue with Google</span>
           </button>
 
+          {/* Apple: the one federated option that stays smooth inside an installed iOS PWA,
+              since it uses the system Apple ID rather than a cookie session the PWA's own
+              storage container doesn't have. Hidden until the Firebase console side is set up —
+              see isAppleSignInEnabled. */}
+          {isAppleSignInEnabled && (
+            <button
+              onClick={handleAppleSignIn}
+              disabled={loading}
+              className="w-full h-12 border border-slate-300 dark:border-neutral-700/80 bg-white dark:bg-neutral-800 rounded-xl hover:bg-slate-50 dark:hover:bg-neutral-700/60 transition-all flex items-center justify-center gap-3 font-sans text-xs font-semibold tracking-wider uppercase text-slate-800 dark:text-neutral-200 shadow-sm active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M17.05 12.54c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.3-.88-2.32-3.5zM14.88 5.9c.6-.74 1.01-1.75.9-2.76-.87.04-1.93.58-2.56 1.31-.56.65-1.05 1.69-.92 2.68.97.08 1.96-.49 2.58-1.23z" />
+              </svg>
+              <span>Continue with Apple</span>
+            </button>
+          )}
+
           {/* Divider */}
           <div className="flex items-center gap-3 my-1">
             <div className="h-px bg-slate-200 dark:bg-neutral-800 flex-1"></div>
@@ -283,6 +310,11 @@ export function FirebaseAuthCard({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="98765 43210"
+                  // tel-national (not tel): the +91 is already rendered as a prefix, so autofilling
+                  // the full international number would double it. inputMode keeps iOS on the
+                  // numeric keypad instead of the alphabetic keyboard.
+                  autoComplete="tel-national"
+                  inputMode="numeric"
                   className="w-full h-11 pl-16 pr-4 rounded-xl border border-slate-300 dark:border-neutral-800 focus:ring-2 focus:ring-hive-gold/45 focus:border-hive-gold text-base font-medium bg-white dark:bg-neutral-900 transition-all outline-none"
                   required
                 />
@@ -321,6 +353,11 @@ export function FirebaseAuthCard({
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
               placeholder="• • • • • •"
               maxLength={6}
+              // one-time-code is what makes iOS offer the code from Messages above the keyboard,
+              // and Android surface the SMS autofill prompt. Without it the shopper has to leave
+              // the app, read the SMS, and type six digits back in by hand.
+              autoComplete="one-time-code"
+              inputMode="numeric"
               className="w-full h-14 text-center tracking-[0.6em] text-lg sm:text-xl font-extrabold rounded-2xl border-2 border-slate-300 dark:border-neutral-700 focus:ring-4 focus:ring-hive-gold/20 focus:border-hive-gold bg-slate-50 dark:bg-neutral-900 text-slate-900 dark:text-white transition-all outline-none shadow-inner"
               required
               autoFocus

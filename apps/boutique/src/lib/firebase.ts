@@ -16,9 +16,10 @@ import {
 } from "firebase/auth";
 import type { Auth } from "firebase/auth";
 
-const authDomain = (process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.includes("firebaseapp.com"))
-  ? process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-  : "hive-fashion.firebaseapp.com";
+// Falls back to the Firebase-hosted domain only when the env var is missing. It used to also
+// reject any value that wasn't *.firebaseapp.com, which silently ignored a custom auth domain
+// (auth.hivenow.in) — the configuration Firebase recommends for Safari/ITP redirect flows.
+const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "hive-fashion.firebaseapp.com";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyB1Qn8xKgOA_mYOLfCNZagS9QEMO0u0Ud8",

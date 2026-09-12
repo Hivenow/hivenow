@@ -14,6 +14,7 @@ import {
   browserLocalPersistence,
   browserPopupRedirectResolver,
   GoogleAuthProvider,
+  OAuthProvider,
 } from "firebase/auth";
 import type { Auth } from "firebase/auth";
 import { authPerfLog } from "./authPerf";
@@ -33,6 +34,27 @@ export const app = wasAlreadyInitialized ? getApp() : initializeApp(firebaseConf
 authPerfLog(`Firebase app ${wasAlreadyInitialized ? "reused (already initialized)" : "initialized"}`);
 
 export const googleProvider = new GoogleAuthProvider();
+// Without this, Google auto-selects when exactly one session exists in this browsing context,
+// so a shopper with several accounts is silently signed in as whichever one Google picked and
+// has no way to switch. Note this only surfaces a chooser for sessions that exist *in this
+// context* — an installed iOS PWA has its own cookie container, so Safari's Google sessions are
+// not visible to it and the first sign-in there is still a full login. See appleProvider below.
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+/**
+ * Apple is the only provider that signs in smoothly inside an installed iOS PWA: it uses the
+ * system Apple ID rather than a cookie session, so it works even though the PWA's cookie
+ * container is separate from Safari's.
+ *
+ * Gated behind NEXT_PUBLIC_ENABLE_APPLE_SIGNIN because it throws auth/operation-not-allowed
+ * until Apple sign-in is enabled in the Firebase console (which needs an Apple Developer
+ * Services ID + key first). Do not flip that flag on before the console side is done.
+ */
+export const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
+
+export const isAppleSignInEnabled = process.env.NEXT_PUBLIC_ENABLE_APPLE_SIGNIN === "true";
 
 let clientAuth: Auth | null = null;
 

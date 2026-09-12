@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { getClientAuth, googleProvider } from "@/lib/firebase";
+import { getClientAuth, googleProvider, appleProvider } from "@/lib/firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, browserPopupRedirectResolver } from "firebase/auth";
 import { authPerfLog, logAuthFlowTotalOnce } from "@/lib/authPerf";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "@/lib/safeStorage";
@@ -38,6 +38,7 @@ export interface SessionContextType extends SessionState {
   loginWithPassword: (email: string, password: string) => Promise<{ token: string; userId: string; role: string }>;
   signUpWithPassword: (email: string, password: string, name?: string) => Promise<{ token: string; userId: string; role: string }>;
   loginWithGoogle: (credential?: string) => Promise<any>;
+  loginWithApple: () => Promise<any>;
   logout: () => Promise<void>;
   setGuestMode: (enabled: boolean) => void;
 }
@@ -85,13 +86,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsGuest(savedGuest);
   }, []);
 
-  // Completes a Google sign-in that went through signInWithRedirect. Lives here rather than on
-  // the sign-in page because the shopper returns to whichever page started the flow.
+  // Completes a federated sign-in (Google or Apple) that went through signInWithRedirect. Lives
+  // here rather than on the sign-in page because the shopper returns to whichever page started
+  // the flow.
   useEffect(() => {
     getRedirectResult(getClientAuth())
       .then((result) => {
         if (!result?.user) return;
-        authPerfLog("Google redirect sign-in completed");
+        authPerfLog(`${result.providerId ?? "Federated"} redirect sign-in completed`);
         setIsGuest(false);
         safeRemoveItem("hive_guest");
       })
@@ -101,7 +103,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (code && ["auth/no-current-user", "auth/null-user", "auth/argument-error"].includes(code)) {
           return;
         }
-        console.error("Google redirect sign-in failed:", err);
+        console.error("Federated redirect sign-in failed:", err);
       });
   }, []);
 
@@ -171,7 +173,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     throw new Error("Password sign up is not supported. Use Google or Phone OTP.");
   };
 
-  const loginWithGoogle = async (credential?: string): Promise<any> => {
+  // Popup-vs-redirect handling is identical for every federated provider, so Google and Apple
+  // share it rather than keeping two copies that can drift apart.
+  const signInWithFederatedProvider = async (
+    provider: typeof googleProvider | typeof appleProvider,
+    providerLabel: string
+  ): Promise<any> => {
     const auth = getClientAuth();
 
     // Guest mode is cleared before any redirect, because signInWithRedirect navigates away
@@ -187,25 +194,31 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // the PWA's own storage.
     if (isStandalonePWA()) {
       clearGuest();
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithRedirect(auth, provider);
       return { redirecting: true };
     }
 
     try {
-      const res = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+      const res = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
       clearGuest();
       return { token: "firebase", userId: res.user.uid, role: "customer" };
     } catch (err) {
       const code = (err as { code?: string } | null)?.code;
       if (code && REDIRECT_FALLBACK_CODES.has(code)) {
         clearGuest();
-        await signInWithRedirect(auth, googleProvider);
+        await signInWithRedirect(auth, provider);
         return { redirecting: true };
       }
-      console.error("Firebase Google SignIn error:", err);
+      console.error(`Firebase ${providerLabel} SignIn error:`, err);
       throw err;
     }
   };
+
+  const loginWithGoogle = async (credential?: string): Promise<any> =>
+    signInWithFederatedProvider(googleProvider, "Google");
+
+  const loginWithApple = async (): Promise<any> =>
+    signInWithFederatedProvider(appleProvider, "Apple");
 
   const logout = async () => {
     try {
@@ -236,7 +249,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         token: null,
         loginWithPassword, 
         signUpWithPassword, 
-        loginWithGoogle, 
+        loginWithGoogle,
+        loginWithApple,
         logout,
         setGuestMode
       }}
