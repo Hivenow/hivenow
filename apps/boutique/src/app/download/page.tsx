@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function DownloadPage() {
   const apkUrl =
-    "https://github.com/deaddev69/Hive/releases/latest/download/hive-partners.apk";
+    "https://github.com/Hivenow/hivenow/releases/latest/download/hive-partners.apk";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-amber-50/60 via-white to-amber-50/40 p-6 font-sans">
