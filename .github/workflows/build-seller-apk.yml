@@ -87,7 +87,7 @@ jobs:
           body: |
             🐝 **Always up-to-date Hive Partners APK**
             
-            Download: [hive-partners.apk](https://github.com/deaddev69/Hive/releases/latest/download/hive-partners.apk)
+            Download: [hive-partners.apk](https://github.com/Hivenow/hivenow/releases/latest/download/hive-partners.apk)
           files: apps/boutique/android/app/build/outputs/apk/debug/hive-partners.apk
           prerelease: false
           make_latest: true
