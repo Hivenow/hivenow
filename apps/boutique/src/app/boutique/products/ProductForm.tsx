@@ -28,6 +28,18 @@ const MATERIAL_OPTIONS = [
   "Cotton", "Silk", "Linen", "Cotton Linen", "Georgette", "Chiffon",
   "Velvet", "Rayon", "Satin", "Blend", "Other"
 ];
+
+/**
+ * Category-specific material overrides. When a category slug matches, the picker
+ * shows only the materials that actually make sense for that product type instead
+ * of the garment-focused default list.
+ */
+const MATERIAL_OPTIONS_BY_SLUG: Record<string, string[]> = {
+  bedsheet: [
+    "100% Cotton", "Cotton", "Egyptian Cotton", "Linen", "Satin",
+    "Microfiber", "Cotton Blend", "Silk", "Bamboo", "Flannel", "Other"
+  ],
+};
 const CARE_OPTIONS = ["Dry Clean Only", "Dry Wash", "Machine Wash Cold", "Hand Wash", "Do Not Bleach", "Other"];
 
 const FABRIC_CONTENT_OPTIONS = [
@@ -2774,7 +2786,10 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                           </button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 py-1 scrollbar-none">
-                          {MATERIAL_OPTIONS.map((mat) => (
+                          {(selectedCategoryObj?.slug && MATERIAL_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
+                            ? MATERIAL_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
+                            : MATERIAL_OPTIONS
+                          ).map((mat) => (
                             <button
                               key={mat}
                               type="button"

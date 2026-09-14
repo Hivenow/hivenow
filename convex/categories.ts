@@ -636,16 +636,11 @@ export const seedBedsheetAttributes = mutation({
       isFreeSize: false,
     });
 
+    // `fabric` is deliberately absent: the global Material picker in Step 4 now
+    // shows bedsheet-specific options via MATERIAL_OPTIONS_BY_SLUG, so asking
+    // again here would be redundant. Same for `careInstructions` — Care is a
+    // mandatory global field.
     const bedsheetFields = [
-      {
-        key: "fabric",
-        label: "Fabric / Material",
-        type: "select" as const,
-        options: ["100% Cotton", "Pure Cotton", "Linen", "Satin", "Egyptian Cotton", "Microfiber", "Cotton Blend", "Silk"],
-        required: true,
-        unit: undefined,
-        helpText: "Fabric composition",
-      },
       {
         key: "threadCount",
         label: "Thread Count",
@@ -690,15 +685,6 @@ export const seedBedsheetAttributes = mutation({
         required: false,
         unit: undefined,
         helpText: undefined,
-      },
-      {
-        key: "careInstructions",
-        label: "Care Instructions",
-        type: "text" as const,
-        options: undefined,
-        required: false,
-        unit: undefined,
-        helpText: "e.g. Machine wash cold, gentle cycle, tumble dry low",
       },
     ];
 
