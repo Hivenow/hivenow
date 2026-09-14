@@ -8,6 +8,8 @@ import { api } from "../../../../../convex/_generated/api";
 import {
   CatalogFilterState,
   DEFAULT_FILTER_STATE,
+  PRICE_MIN,
+  PRICE_MAX,
   countActiveFilters,
 } from "@/lib/catalogFilters";
 import { CategoryFilter } from "./filters/CategoryFilter";
@@ -30,12 +32,26 @@ export const CatalogFilters: React.FC<CatalogFiltersProps> = ({
   className,
 }) => {
   const activeCount = countActiveFilters(filters);
+  const isPriceActive = filters.minPrice > PRICE_MIN || filters.maxPrice < PRICE_MAX;
+
+  const formatPriceLabel = () => {
+    if (filters.minPrice > PRICE_MIN && filters.maxPrice < PRICE_MAX) {
+      return `₹${filters.minPrice.toLocaleString("en-IN")}–₹${filters.maxPrice.toLocaleString("en-IN")}`;
+    }
+    if (filters.maxPrice < PRICE_MAX) {
+      return `Under ₹${filters.maxPrice.toLocaleString("en-IN")}`;
+    }
+    if (filters.minPrice > PRICE_MIN) {
+      return `Above ₹${filters.minPrice.toLocaleString("en-IN")}`;
+    }
+    return "";
+  };
 
   // The chips below carried category IDs, so an active category filter showed
   // the shopper a raw document id instead of the category's name.
   const dbCategories = useQuery(api.categories.getCategories, { onlyActive: true });
   const categoryName = (id: string) =>
-    dbCategories?.find((c) => c._id === id)?.name ?? "Category";
+    dbCategories?.find((c: any) => c._id === id)?.name ?? "Category";
 
   const reset = () => onChange(DEFAULT_FILTER_STATE);
 
@@ -113,6 +129,12 @@ export const CatalogFilters: React.FC<CatalogFiltersProps> = ({
               }
             />
           ))}
+          {isPriceActive && (
+            <ActiveTag
+              label={formatPriceLabel()}
+              onRemove={() => patch({ minPrice: PRICE_MIN, maxPrice: PRICE_MAX })}
+            />
+          )}
           {filters.newArrivals && (
             <ActiveTag
               label="New Finds"

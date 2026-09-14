@@ -29,6 +29,21 @@ export const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "Free Size"] as const;
 export const PRICE_MIN = 0;
 export const PRICE_MAX = 10000;
 
+export interface PricePreset {
+  label: string;
+  shortLabel: string;
+  min: number;
+  max: number;
+}
+
+export const PRICE_PRESETS: readonly PricePreset[] = [
+  { label: "All Prices", shortLabel: "All", min: PRICE_MIN, max: PRICE_MAX },
+  { label: "Under ₹1,500", shortLabel: "Under ₹1.5k", min: PRICE_MIN, max: 1500 },
+  { label: "₹1,500 – ₹3,000", shortLabel: "₹1.5k–₹3k", min: 1500, max: 3000 },
+  { label: "₹3,000 – ₹6,000", shortLabel: "₹3k–₹6k", min: 3000, max: 6000 },
+  { label: "Above ₹6,000", shortLabel: "Above ₹6k", min: 6000, max: PRICE_MAX },
+] as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers — count active filters (for the mobile badge)
 // ─────────────────────────────────────────────────────────────────────────────

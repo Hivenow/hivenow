@@ -15,6 +15,7 @@ import {
   applyCatalogFilters,
   applyCatalogSort,
   DEFAULT_SORT,
+  displayPricing,
 } from "./shared/catalog";
 import { updateBoutiqueProductCount } from "./boutiques";
 import { normalizeEmail } from "./users";
@@ -1265,12 +1266,14 @@ async function selectCatalogProducts(ctx: QueryCtx, args: CatalogSelectionArgs) 
       filtered = filtered.filter(p => p.featured === true);
     }
 
-    // Price range filter
-    if (args.minPrice !== undefined) {
-      filtered = filtered.filter(p => p.price >= args.minPrice!);
-    }
-    if (args.maxPrice !== undefined) {
-      filtered = filtered.filter(p => p.price <= args.maxPrice!);
+    // Price range filter (normalized customer selling price in Rupees)
+    if (args.minPrice !== undefined || args.maxPrice !== undefined) {
+      filtered = filtered.filter((p) => {
+        const sellingPrice = displayPricing(p).price;
+        if (args.minPrice !== undefined && sellingPrice < args.minPrice) return false;
+        if (args.maxPrice !== undefined && sellingPrice > args.maxPrice) return false;
+        return true;
+      });
     }
 
 

@@ -12,6 +12,7 @@ import {
   STANDARD_SIZES,
   PRICE_MIN,
   PRICE_MAX,
+  PRICE_PRESETS,
   countActiveFilters,
 } from "@/lib/catalogFilters";
 import { toQueryCoords } from "@/lib/distance";
@@ -37,13 +38,6 @@ const OCCASIONS = [
   { id: "workwear", label: "Office & Formal" },
 ];
 
-const PRICE_PRESETS = [
-  { label: "All Prices", min: PRICE_MIN, max: PRICE_MAX },
-  { label: "Under ₹1,500", min: PRICE_MIN, max: 1500 },
-  { label: "₹1,500 – ₹3,000", min: 1500, max: 3000 },
-  { label: "₹3,000 – ₹6,000", min: 3000, max: 6000 },
-  { label: "Above ₹6,000", min: 6000, max: PRICE_MAX },
-];
 
 export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
   filters,
@@ -610,7 +604,11 @@ export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
             className="w-full py-3.5 rounded-xl bg-stone-900 text-white text-xs font-bold uppercase tracking-wider shadow-sm hover:bg-stone-800 disabled:opacity-50 transition-all duration-150 cursor-pointer"
           >
             {draftCount !== undefined
-              ? `Show ${draftCount} Items`
+              ? draftCount === 0
+                ? "No Matching Items"
+                : draftCount === 1
+                  ? "Show 1 Item"
+                  : `Show ${draftCount} Items`
               : "Updating..."}
           </button>
         </div>

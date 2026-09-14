@@ -2,7 +2,7 @@
 
 import React, { useCallback } from "react";
 import { FilterSection } from "./FilterSection";
-import { PRICE_MIN, PRICE_MAX } from "@/lib/catalogFilters";
+import { PRICE_MIN, PRICE_MAX, PRICE_PRESETS } from "@/lib/catalogFilters";
 
 interface PriceRangeFilterProps {
   minPrice: number;
@@ -36,8 +36,13 @@ export const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
     [minPrice, onChange]
   );
 
-  const minPct = ((minPrice - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100;
-  const maxPct = ((maxPrice - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100;
+  const minPct = Math.min(100, Math.max(0, ((minPrice - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100));
+  const maxPct = Math.min(100, Math.max(0, ((maxPrice - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100));
+
+  // Quick presets excluding "All Prices"
+  const filterPresets = PRICE_PRESETS.filter(
+    (p) => p.min > PRICE_MIN || p.max < PRICE_MAX
+  );
 
   return (
     <FilterSection title="Price Range" activeCount={isActive ? 1 : 0}>
@@ -46,7 +51,9 @@ export const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-sm font-bold text-hive-dark">{fmt(minPrice)}</span>
           <span className="text-xs text-hive-text-muted">–</span>
-          <span className="text-sm font-bold text-hive-dark">{fmt(maxPrice)}</span>
+          <span className="text-sm font-bold text-hive-dark">
+            {maxPrice >= PRICE_MAX ? `${fmt(maxPrice)}+` : fmt(maxPrice)}
+          </span>
         </div>
 
         {/* Dual-range slider */}
@@ -109,12 +116,7 @@ export const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
 
         {/* Quick preset chips */}
         <div className="flex flex-wrap gap-2">
-          {[
-            { label: "Under ₹2k", min: 0, max: 2000 },
-            { label: "₹2k–₹5k", min: 2000, max: 5000 },
-            { label: "₹5k–₹10k", min: 5000, max: 10000 },
-            { label: "₹10k+", min: 10000, max: 50000 },
-          ].map((preset) => {
+          {filterPresets.map((preset) => {
             const active = minPrice === preset.min && maxPrice === preset.max;
             return (
               <button
@@ -127,7 +129,7 @@ export const PriceRangeFilter: React.FC<PriceRangeFilterProps> = ({
                     : "bg-stone-50 dark:bg-stone-900 border-stone-200/80 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-amber-400 hover:bg-stone-100"
                 }`}
               >
-                {preset.label}
+                {preset.shortLabel}
               </button>
             );
           })}
