@@ -135,11 +135,9 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        // Carry the slug across. This rule used to send every /collections/<slug>
-        // to a bare /products, which is why homepage category tiles rendered the
-        // whole catalogue instead of the category that was clicked.
+        // Carry the slug across to canonical /products/:slug
         source: "/collections/:slug",
-        destination: "/products?category=:slug",
+        destination: "/products/:slug",
         permanent: true,
       },
       {
@@ -149,36 +147,33 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/category/:slug*",
-        destination: "/products?category=:slug*",
+        destination: "/products/:slug*",
         permanent: true,
       },
-      // Two categories shipped with a slug that disagreed with their name:
-      // "Mens" was reachable at /ethnic-wer (a typo) and "Accessories" at
-      // /handbags. The hierarchy migration corrects both, so the old addresses
-      // are redirected rather than left to 404.
+      // Correct legacy typo URLs to canonical /products/ethnic-wear
       {
         source: "/products/ethnic-wer",
-        destination: "/products?category=ethnic-wear",
+        destination: "/products/ethnic-wear",
         permanent: true,
       },
       {
         source: "/products/ethic-wear",
-        destination: "/products?category=ethnic-wear",
+        destination: "/products/ethnic-wear",
         permanent: true,
       },
       {
         source: "/ethic-wear",
-        destination: "/products?category=ethnic-wear",
+        destination: "/products/ethnic-wear",
         permanent: true,
       },
       {
         source: "/ethnic-wer",
-        destination: "/products?category=ethnic-wear",
+        destination: "/products/ethnic-wear",
         permanent: true,
       },
       {
         source: "/collections/ethnic-wer",
-        destination: "/products?category=ethnic-wear",
+        destination: "/products/ethnic-wear",
         permanent: true,
       },
     ];

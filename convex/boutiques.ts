@@ -931,18 +931,25 @@ export const getBoutiquePublicProfile = query({
     // Strictly pick public fields
     return {
       _id: boutique._id,
+      slug: boutique.slug,
       boutiqueName: boutique.boutiqueName,
       description: boutique.description,
       logoUrl,
       bannerUrl,
+      address: boutique.address,
       city: boutique.city,
       state: boutique.state,
+      pincode: boutique.pincode,
+      latitude: boutique.latitude,
+      longitude: boutique.longitude,
       deliveryRadiusKm: boutique.deliveryRadiusKm,
       isAcceptingOrders: boutique.isAcceptingOrders,
       merchantTier,
       trustTier: merchantTier,
       storeCategory: boutique.storeCategory,
       createdAt: boutique.createdAt,
+      averageRating: boutique.averageRating,
+      reviewCount: boutique.reviewCount,
     };
   }
 });

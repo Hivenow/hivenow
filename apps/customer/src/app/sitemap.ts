@@ -83,19 +83,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       };
     });
 
-  // 6. Category Depth Pages (Both /products/:slug and /products?category=:slug for deep indexation)
+  // 6. Category Depth Pages (Canonical /products/:slug only)
   const categoryPages: MetadataRoute.Sitemap = [];
   categories.forEach((cat) => {
     if (!cat.slug) return;
     const lastMod = new Date(cat.updatedAt || cat._creationTime || Date.now());
     categoryPages.push({
       url: `${baseUrl}/products/${cat.slug}`,
-      lastModified: lastMod,
-      changeFrequency: "daily",
-      priority: 0.85,
-    });
-    categoryPages.push({
-      url: `${baseUrl}/products?category=${cat.slug}`,
       lastModified: lastMod,
       changeFrequency: "daily",
       priority: 0.85,

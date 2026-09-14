@@ -7,7 +7,7 @@ interface Props {
 export default async function CollectionPage({ params }: Props) {
   const { slug } = await params;
   if (slug) {
-    redirect(`/products?category=${encodeURIComponent(slug)}`);
+    redirect(`/products/${encodeURIComponent(slug)}`);
   }
   redirect("/products");
 }

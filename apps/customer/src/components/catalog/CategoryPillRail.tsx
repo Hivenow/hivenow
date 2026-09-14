@@ -119,7 +119,7 @@ export function CategoryPillRail({ activeCategorySlug }: CategoryPillRailProps =
             return (
               <Link
                 key={root._id}
-                href={`/products?category=${root.slug}${suffix}`}
+                href={`/products/${root.slug}${suffix}`}
                 className={`relative shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] sm:text-xs uppercase tracking-wider transition-colors duration-200 ${
                   isRootActive
                     ? "text-stone-900 font-bold"
@@ -145,7 +145,7 @@ export function CategoryPillRail({ activeCategorySlug }: CategoryPillRailProps =
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1.5 pb-0.5">
             {/* "All" pill representing the whole group */}
             <Link
-              href={`/products?category=${activeRoot.slug}${suffix}`}
+              href={`/products/${activeRoot.slug}${suffix}`}
               className={`shrink-0 inline-flex items-center px-3.5 py-1.5 rounded-full text-xs transition-all duration-150 ${
                 activeCategory === activeRoot.slug
                   ? "bg-stone-900 text-white font-semibold shadow-xs"
@@ -164,7 +164,7 @@ export function CategoryPillRail({ activeCategorySlug }: CategoryPillRailProps =
                 return (
                   <Link
                     key={child._id}
-                    href={`/products?category=${child.slug}${suffix}`}
+                    href={`/products/${child.slug}${suffix}`}
                     className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all duration-150 ${
                       isChildActive
                         ? "bg-stone-800 text-white font-semibold"
@@ -182,7 +182,7 @@ export function CategoryPillRail({ activeCategorySlug }: CategoryPillRailProps =
               return (
                 <Link
                   key={child._id}
-                  href={`/products?category=${child.slug}${suffix}`}
+                  href={`/products/${child.slug}${suffix}`}
                   className={`shrink-0 inline-flex items-center px-3.5 py-1.5 rounded-full text-xs transition-all duration-150 ${
                     isChildActive
                       ? "bg-stone-900 text-white font-semibold shadow-xs"

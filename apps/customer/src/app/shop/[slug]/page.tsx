@@ -1,125 +1,308 @@
-"use client";
-
-import React, { useEffect } from "react";
-import { useParams, notFound, useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
+import React from "react";
+import { notFound } from "next/navigation";
+import { Metadata } from "next";
+import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../../convex/_generated/api";
-import { Loader2, MapPin, CheckCircle, ArrowLeft } from "lucide-react";
-import { LoadingState } from "@hive/ui";
-import Image from "next/image";
-import { ProductGrid } from "@/components/product/ProductGrid";
-import { ProductCardData } from "@/lib/mockProducts";
-import { useLocation } from "@/context/LocationContext";
-import { CatalogLayout } from "@/components/catalog/CatalogLayout";
+import { SITE_URL } from "@/lib/seo";
 import { mapDbProduct } from "@/lib/mapDbProduct";
+import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
+import {
+  BoutiqueStorefrontClient,
+  PublicBoutique,
+  RelatedBoutique,
+  CategoryInfo,
+} from "./BoutiqueStorefrontClient";
 
-// Helper to map DB product → ProductCardData
+interface Props {
+  params: Promise<{ slug: string }>;
+}
 
+export const revalidate = 60; // ISR cache for 60 seconds
 
-export default function BoutiqueStorefrontPage() {
-  const params = useParams() as { slug: string };
-  const router = useRouter();
-  const { latitude: userLat, longitude: userLng } = useLocation();
+function getConvexClient(): ConvexHttpClient | null {
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!url) return null;
+  return new ConvexHttpClient(url);
+}
 
-  // Fetch the boutique's public profile
-  const boutique = useQuery(api.boutiques.getBoutiquePublicProfile, { slug: params.slug });
-  
-  // Once we have the boutique ID, fetch all of their active products
-  const productsResult = useQuery(api.products.getActiveProducts, 
-    boutique ? { boutiqueId: boutique._id } : "skip"
-  );
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const client = getConvexClient();
+  if (!client) return { title: "Shop — Hive" };
 
-  useEffect(() => {
-    if (boutique) {
-      document.title = `${boutique.boutiqueName} — Hive`;
+  try {
+    const boutique = await client.query(api.boutiques.getBoutiquePublicProfile, { slug });
+    if (!boutique) {
+      return {
+        title: "Shop Not Found | Hive",
+        robots: { index: false, follow: false },
+      };
     }
-  }, [boutique]);
 
-  if (boutique === undefined) {
-    return <LoadingState message="Loading boutique storefront..." variant="full" />;
+    const city = boutique.city || "Kochi";
+    const title = `${boutique.boutiqueName} — Boutique in ${city} | Shop Online on Hive`;
+    const description =
+      boutique.description ||
+      `Shop curated fashion from ${boutique.boutiqueName} in ${city}, Kerala. Kurtis, sarees, dresses & accessories delivered to your door in 90 minutes via Hive.`;
+
+    const shareImage = boutique.bannerUrl || boutique.logoUrl || "/icon-512x512.png";
+
+    return {
+      title,
+      description,
+      alternates: {
+        canonical: `${SITE_URL}/shop/${slug}`,
+      },
+      openGraph: {
+        title,
+        description,
+        url: `${SITE_URL}/shop/${slug}`,
+        siteName: "Hive",
+        images: [
+          {
+            url: shareImage,
+            width: 1200,
+            height: 630,
+            alt: `${boutique.boutiqueName} Storefront`,
+          },
+        ],
+        type: "website",
+      },
+      twitter: {
+        card: "summary_large_image",
+        title,
+        description,
+        images: [shareImage],
+      },
+    };
+  } catch (err) {
+    console.error("Failed to generate metadata for shop:", err);
+    return { title: "Shop — Hive" };
+  }
+}
+
+export default async function BoutiqueStorefrontPage({ params }: Props) {
+  const { slug } = await params;
+  const client = getConvexClient();
+
+  if (!client) {
+    return notFound();
   }
 
-  // Suspended, rejected, or invalid slug returns null
-  if (boutique === null) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
-        <h1 className="text-2xl font-bold text-stone-800">Shop Not Available</h1>
-        <p className="text-stone-600 max-w-md">
-          This shop isn&apos;t currently available. They may be temporarily closed or updating their storefront.
-        </p>
-      </div>
-    );
+  let boutique: any = null;
+  let rawProducts: any[] = [];
+  let rawCategories: any[] = [];
+  let rawApprovedBoutiques: any[] = [];
+
+  try {
+    boutique = await client.query(api.boutiques.getBoutiquePublicProfile, { slug });
+
+    if (!boutique) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+          <h1 className="text-2xl font-bold text-stone-800">Shop Not Available</h1>
+          <p className="text-stone-600 max-w-md">
+            This shop is not currently active on Hive. They may be updating their catalog or temporarily closed.
+          </p>
+        </div>
+      );
+    }
+
+    const [productsRes, categoriesRes, approvedRes] = await Promise.all([
+      client.query(api.products.getActiveProducts, { boutiqueId: boutique._id }),
+      client.query(api.categories.getCategories, { onlyActive: true }),
+      client.query(api.boutiques.getApprovedBoutiques, {}),
+    ]);
+
+    rawProducts = productsRes || [];
+    rawCategories = categoriesRes || [];
+    rawApprovedBoutiques = approvedRes || [];
+  } catch (error) {
+    console.error("Failed to fetch boutique storefront data:", error);
+    return notFound();
   }
 
-  const products = productsResult ? productsResult.map(mapDbProduct) : [];
+  const products = rawProducts.map(mapDbProduct);
+
+  const categories: CategoryInfo[] = rawCategories
+    .filter((c: any) => c.slug && c.name)
+    .map((c: any) => ({
+      _id: c._id,
+      name: c.name,
+      slug: c.slug,
+    }));
+
+  const relatedBoutiques: RelatedBoutique[] = rawApprovedBoutiques
+    .filter((b: any) => b._id !== boutique._id)
+    .slice(0, 3)
+    .map((b: any) => ({
+      _id: b._id,
+      slug: b.slug,
+      boutiqueName: b.boutiqueName,
+      city: b.city,
+      logoUrl: b.logoUrl,
+      bannerUrl: b.bannerUrl,
+      merchantTier: b.merchantTier,
+      storeCategory: b.storeCategory,
+      activeApprovedProductCount: b.activeApprovedProductCount,
+    }));
+
+  const publicBoutique: PublicBoutique = {
+    _id: boutique._id,
+    slug: boutique.slug || slug,
+    boutiqueName: boutique.boutiqueName,
+    description: boutique.description,
+    logoUrl: boutique.logoUrl,
+    bannerUrl: boutique.bannerUrl,
+    address: boutique.address,
+    city: boutique.city,
+    state: boutique.state,
+    pincode: boutique.pincode,
+    latitude: boutique.latitude,
+    longitude: boutique.longitude,
+    deliveryRadiusKm: boutique.deliveryRadiusKm,
+    isAcceptingOrders: boutique.isAcceptingOrders,
+    merchantTier: boutique.merchantTier,
+    storeCategory: boutique.storeCategory,
+    createdAt: boutique.createdAt,
+    averageRating: boutique.averageRating,
+    reviewCount: boutique.reviewCount,
+  };
+
+  const city = boutique.city || "Kochi";
+  const displayAddress = boutique.address || `${city}, Kerala`;
+
+  // ── JSON-LD Structured Data: LocalBusiness / ClothingStore ───────────────
+  const localBusinessSchema = {
+    "@context": "https://schema.org",
+    "@type": "ClothingStore",
+    "@id": `${SITE_URL}/shop/${slug}#store`,
+    name: boutique.boutiqueName,
+    description:
+      boutique.description ||
+      `${boutique.boutiqueName} is a local boutique in ${city}, Kerala offering express fashion delivery via Hive.`,
+    url: `${SITE_URL}/shop/${slug}`,
+    image: boutique.bannerUrl || boutique.logoUrl || `${SITE_URL}/icon-512x512.png`,
+    priceRange: "₹₹",
+    currenciesAccepted: "INR",
+    paymentAccepted: "Cash, Credit Card, UPI, Net Banking",
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: boutique.address || city,
+      addressLocality: city,
+      addressRegion: boutique.state || "Kerala",
+      postalCode: boutique.pincode || "682016",
+      addressCountry: "IN",
+    },
+    ...(boutique.latitude && boutique.longitude
+      ? {
+          geo: {
+            "@type": "GeoCoordinates",
+            latitude: boutique.latitude,
+            longitude: boutique.longitude,
+          },
+        }
+      : {}),
+    areaServed: [
+      {
+        "@type": "City",
+        name: "Kochi",
+      },
+      {
+        "@type": "City",
+        name: "Ernakulam",
+      },
+    ],
+    openingHoursSpecification: [
+      {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+        ],
+        opens: "10:00",
+        closes: "20:30",
+      },
+    ],
+  };
+
+  // ── JSON-LD Structured Data: FAQPage ─────────────────────────────────────
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: `How quickly does Hive deliver from ${boutique.boutiqueName}?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `Orders placed on Hive are packed directly by ${boutique.boutiqueName}'s staff in Kochi and dispatched via dedicated express couriers in approximately 90 minutes.`,
+        },
+      },
+      {
+        "@type": "Question",
+        name: `Are products from ${boutique.boutiqueName} authentic?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `Yes, 100% authentic. All products come directly from ${boutique.boutiqueName}'s physical showroom inventory with original brand tags.`,
+        },
+      },
+      {
+        "@type": "Question",
+        name: `Can I visit ${boutique.boutiqueName}'s physical showroom?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `Yes! ${boutique.boutiqueName} operates a physical store at ${displayAddress}. You can visit in person or order online through Hive for 90-minute delivery.`,
+        },
+      },
+      {
+        "@type": "Question",
+        name: `What is the return and exchange policy for ${boutique.boutiqueName}?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `Hive provides hassle-free doorstep returns and size exchanges within 2 days of delivery across Kochi and Ernakulam.`,
+        },
+      },
+    ],
+  };
 
   return (
-    <CatalogLayout
-      breadcrumbs={[
-        { label: "Home", href: "/" },
-        { label: "Boutiques", href: "/products" },
-        { label: boutique.boutiqueName },
-      ]}
-    >
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-8 w-full py-8 flex flex-col gap-6">
-        
-        {/* Back Button */}
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-stone-900 transition-colors self-start cursor-pointer group"
-        >
-          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back</span>
-        </button>
+    <>
+      {/* Structured Data: LocalBusiness / ClothingStore */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(localBusinessSchema).replace(/</g, "\\u003c"),
+        }}
+      />
 
-        {/* Sleek Minimal Boutique Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-stone-200">
-          <div className="flex items-center gap-4">
-            {boutique.logoUrl ? (
-              <div className="relative w-16 h-16 rounded-full overflow-hidden border border-stone-200 shadow-sm flex-shrink-0 bg-white">
-                <Image
-                  src={boutique.logoUrl}
-                  alt={`${boutique.boutiqueName} logo`}
-                  fill
-                  sizes="64px"
-                  className="object-cover"
-                />
-              </div>
-            ) : (
-              <div className="w-16 h-16 rounded-full border border-stone-200 shadow-sm bg-stone-100 flex items-center justify-center text-xl font-serif text-stone-700 flex-shrink-0 select-none">
-                {boutique.boutiqueName.charAt(0)}
-              </div>
-            )}
-            
-            <div className="space-y-1 text-left">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl md:text-2xl font-serif font-semibold text-stone-900 leading-tight">
-                  {boutique.boutiqueName}
-                </h1>
-              </div>
-              <p className="text-xs text-stone-500 max-w-xl font-medium tracking-wide">
-                {boutique.city || "Kochi"}
-              </p>
-            </div>
-          </div>
+      {/* Structured Data: FAQPage */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqSchema).replace(/</g, "\\u003c"),
+        }}
+      />
 
-          <div className="flex items-center gap-2 self-start sm:self-center">
-            <span className="text-xs font-semibold text-stone-500 bg-stone-100 px-3 py-1.5 rounded-lg border border-stone-200">
-              {products.length} {products.length === 1 ? "Product" : "Products"}
-            </span>
-          </div>
-        </div>
+      {/* Structured Data: Breadcrumbs */}
+      <BreadcrumbSchema
+        items={[
+          { name: "Home", url: "/" },
+          { name: "Boutiques", url: "/products" },
+          { name: boutique.boutiqueName, url: `/shop/${slug}` },
+        ]}
+      />
 
-
-        {/* Product Grid */}
-        <div className="w-full">
-          <ProductGrid 
-            products={products}
-            selectedOccasion="all"
-            isLoading={productsResult === undefined}
-          />
-        </div>
-      </div>
-    </CatalogLayout>
+      <BoutiqueStorefrontClient
+        boutique={publicBoutique}
+        products={products}
+        categories={categories}
+        relatedBoutiques={relatedBoutiques}
+      />
+    </>
   );
 }

@@ -7,6 +7,8 @@ export function mapDbProduct(p: any): ProductCardData & {
   boutiqueId?: string;
   boutique?: any;
   discountPercent?: number;
+  categoryId?: string;
+  categoryIds?: string[];
 } {
   const { price, compareAtPrice, discountPercent } = calculateDisplayPricing(p);
 
@@ -26,5 +28,7 @@ export function mapDbProduct(p: any): ProductCardData & {
     sizes: p.sizes || [],
     stockBySize: p.stockBySize || {},
     deliveryLabel: p.deliveryLabel,
+    categoryId: p.categoryId ? String(p.categoryId) : undefined,
+    categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds.map(String) : undefined,
   };
 }

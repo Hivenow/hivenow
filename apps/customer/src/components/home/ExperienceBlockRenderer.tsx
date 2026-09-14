@@ -533,7 +533,7 @@ export function ExperienceBlockRenderer({ block }: { block: any }) {
                 {categories.map((subcat: any) => (
                   <button
                     key={subcat._id}
-                    onClick={() => router.push(`/products?category=${encodeURIComponent(subcat.slug)}`)}
+                    onClick={() => router.push(`/products/${encodeURIComponent(subcat.slug)}`)}
                     className="flex flex-col items-center gap-2.5 w-20 sm:w-24 flex-shrink-0 group cursor-pointer"
                   >
                     <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border border-hive-border/40 bg-slate-50 transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-md">
@@ -582,7 +582,7 @@ export function ExperienceBlockRenderer({ block }: { block: any }) {
               return (
                 <button
                   key={subcat._id}
-                  onClick={() => router.push(`/products?category=${encodeURIComponent(subcat.slug)}`)}
+                  onClick={() => router.push(`/products/${encodeURIComponent(subcat.slug)}`)}
                   className="group relative aspect-[3/4] w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-neutral-100 dark:bg-neutral-900 shadow-sm hover:shadow-xl transition-all duration-300 active:scale-[0.98] text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-hive-gold"
                   aria-label={`Shop ${subcat.name}`}
                 >

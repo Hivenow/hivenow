@@ -5,7 +5,13 @@ import { getProductsMetadata } from "@/lib/seo";
 import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
 import { SITE_URL } from "@/lib/seo";
 
+import { permanentRedirect } from "next/navigation";
+
 export const metadata = getProductsMetadata();
+
+interface PageProps {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
 
 interface CategoryListItem {
   name: string;
@@ -42,7 +48,26 @@ async function fetchCategoryList(): Promise<CategoryListItem[]> {
   }
 }
 
-export default async function ProductsPage() {
+export default async function ProductsPage({ searchParams }: PageProps) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const categoryParam = typeof resolvedParams.category === "string" ? resolvedParams.category : undefined;
+
+  if (categoryParam) {
+    const remainingParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(resolvedParams)) {
+      if (key !== "category" && value !== undefined) {
+        if (Array.isArray(value)) {
+          value.forEach((v) => remainingParams.append(key, v));
+        } else {
+          remainingParams.append(key, value);
+        }
+      }
+    }
+    const queryString = remainingParams.toString();
+    const destination = `/products/${encodeURIComponent(categoryParam)}${queryString ? `?${queryString}` : ""}`;
+    permanentRedirect(destination);
+  }
+
   const categories = await fetchCategoryList();
 
   const itemListSchema =
