@@ -103,7 +103,21 @@ export default async function LegalDocumentPage({ params }: Props) {
           <ArrowLeft className="w-4 h-4" /> Back to Store
         </Link>
         <div className="prose prose-hive max-w-none text-slate-800 leading-relaxed font-sans">
-          <ReactMarkdown>{content}</ReactMarkdown>
+          <ReactMarkdown
+            components={{
+              img: ({ node, ...props }) => (
+                <span className="block my-6 text-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    className="rounded-2xl border border-hive-border/60 shadow-md max-w-sm w-full mx-auto block"
+                    {...props}
+                  />
+                </span>
+              ),
+            }}
+          >
+            {content}
+          </ReactMarkdown>
         </div>
       </div>
     </div>

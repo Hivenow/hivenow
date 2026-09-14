@@ -3,13 +3,13 @@
 
 ---
 
-### OPTIONAL APP PERMISSION SCREENSHOTS — USE ONLY IF THESE PERMISSIONS ARE ACTUALLY REQUESTED
+### APP PERMISSION SCREENSHOTS
 
-*[PHOTO PLACEHOLDER 1]* **HiveNow location permission screen**  
-*Insert a screenshot only if HiveNow actually requests camera or photo-library access, such as for return/quality evidence. Insert a screenshot of the actual iOS/Android location permission prompt shown by HiveNow.*
+**HiveNow Location Permission Prompt**
 
-*[PHOTO PLACEHOLDER 2]* **HiveNow camera/photo permission screen**  
-*No images are legally required for this Privacy Policy. These placeholders are included only if Hive wants to document actual in-app permission prompts in the same style as the reference policy.*
+![HiveNow Location Permission Prompt](/images/legal/hivenow-location-permission.png)
+
+*The actual location permission prompt shown by HiveNow in the browser and mobile interface.*
 
 ---
 
