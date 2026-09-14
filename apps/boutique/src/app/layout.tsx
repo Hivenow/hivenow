@@ -17,7 +17,7 @@ const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-satoshi",
   display: "swap",
-});
+}); // Trigger Vercel deploy for @hive/boutique (Sep 14, 2026 - Bedsheet Sizing & Attributes)
 
 export const metadata: Metadata = {
   title: "Hive Partner Portal",

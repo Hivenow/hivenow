@@ -15,7 +15,7 @@ const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-satoshi",
   display: "swap",
-}); // Trigger Vercel deploy for @hive/admin (Aug 18, 2026 - Platform Config Price Sync)
+}); // Trigger Vercel deploy for @hive/admin (Sep 14, 2026 - Bedsheet Attributes & Sizing System)
 
 
 export const metadata: Metadata = {

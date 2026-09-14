@@ -1,4 +1,4 @@
-// Trigger Vercel deployment for @hive/customer (Aug 18, 2026 - Checkout Session Auth & Price Sync)
+// Trigger Vercel deployment for @hive/customer (Sep 14, 2026 - Bedsheet Sizing & Filter Update)
 import type { Metadata } from "next";
 
 import { Inter, Outfit, Cormorant_Garamond } from "next/font/google";
