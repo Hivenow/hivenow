@@ -1256,3 +1256,31 @@ export const removeDanglingCollectionProducts = internalMutation({
     };
   },
 });
+
+/**
+ * Migration to correct the "ethic-wear" typo in the categories table to "ethnic-wear" / "Ethnic Wear".
+ */
+export const fixEthicWearCategory = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const cat = await ctx.db
+      .query("categories")
+      .withIndex("by_slug", (q) => q.eq("slug", "ethic-wear"))
+      .first();
+
+    if (!cat) {
+      return { status: "already_fixed_or_missing" };
+    }
+
+    if (args.apply) {
+      await ctx.db.patch(cat._id, {
+        name: "Ethnic Wear",
+        slug: "ethnic-wear",
+      });
+      return { status: "patched", id: cat._id, previousName: cat.name };
+    }
+
+    return { status: "dry_run", id: cat._id, name: cat.name };
+  },
+});
+
