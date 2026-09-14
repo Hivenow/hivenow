@@ -5,11 +5,17 @@
 
 ### APP PERMISSION SCREENSHOTS
 
-**HiveNow Location Permission Prompt**
+#### 1. Browser Location Permission Prompt
 
-![HiveNow Location Permission Prompt](/images/legal/hivenow-location-permission.png)
+![HiveNow Browser Location Permission Prompt](/images/legal/hivenow-location-permission.png)
 
-*The actual location permission prompt shown by HiveNow in the browser and mobile interface.*
+*The location permission prompt shown when accessing HiveNow via web browser.*
+
+#### 2. Mobile Device Location & Accuracy Prompt
+
+![HiveNow Mobile Location Accuracy Prompt](/images/legal/hivenow-location-mobile.jpg)
+
+*The system location accuracy prompt shown on mobile devices to determine delivery availability and nearest boutique inventory.*
 
 ---
 

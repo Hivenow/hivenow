@@ -44,6 +44,7 @@ export const SizeSystemValidator = v.union(
   v.literal("free_size"),
   v.literal("belt_numeric"),
   v.literal("kids_age"),
+  v.literal("bed_linen"),
   v.literal("custom"),
 );
 

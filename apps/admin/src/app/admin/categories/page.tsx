@@ -17,7 +17,7 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { VERTICAL_CONFIGS, VERTICAL_TYPES, VerticalType } from "@hive/types";
+import { VERTICAL_CONFIGS, VERTICAL_TYPES, VerticalType, SizeSystemType } from "@hive/types";
 import Link from "next/link";
 import { AttributeSchemaEditor } from "./AttributeSchemaEditor";
 
@@ -46,6 +46,7 @@ type CategoryRow = {
   seoIntro?: string;
   seoDescription?: string;
   verticalType?: VerticalType;
+  sizeSystem?: SizeSystemType;
   imageUrl?: string | null;
   imageStorageId?: unknown;
 };
@@ -87,6 +88,7 @@ export default function AdminCategoriesPage() {
   const [seoIntro, setSeoIntro] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
   const [verticalType, setVerticalType] = useState<VerticalType>("apparel");
+  const [sizeSystem, setSizeSystem] = useState<SizeSystemType | "">("");
   const [imageStorageId, setImageStorageId] = useState<unknown>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -159,6 +161,7 @@ export default function AdminCategoriesPage() {
       setSeoIntro("");
       setSeoDescription("");
       setVerticalType("apparel");
+      setSizeSystem("");
       setImageStorageId(null);
       setPreviewUrl(null);
       return;
@@ -173,6 +176,7 @@ export default function AdminCategoriesPage() {
     setSeoIntro(category.seoIntro ?? "");
     setSeoDescription(category.seoDescription ?? "");
     setVerticalType(category.verticalType ?? "apparel");
+    setSizeSystem(category.sizeSystem ?? "");
     setImageStorageId(category.imageStorageId ?? null);
     setPreviewUrl(category.imageUrl ?? null);
   };
@@ -250,6 +254,7 @@ export default function AdminCategoriesPage() {
         seoIntro: seoIntro.trim() || undefined,
         seoDescription: seoDescription.trim() || undefined,
         verticalType,
+        sizeSystem: (sizeSystem as SizeSystemType) || undefined,
         parentId: parentId ? (parentId as any) : undefined,
       };
 
@@ -520,6 +525,28 @@ export default function AdminCategoriesPage() {
                         Sets returns and exchange defaults, and the built-in seller form used
                         when this category has no attributes of its own. Existing products keep
                         the vertical they were created under.
+                      </p>
+
+                      <Select
+                        label="Size System"
+                        value={sizeSystem}
+                        onChange={(e) => setSizeSystem(e.target.value as SizeSystemType | "")}
+                      >
+                        <option value="">Auto (derived from category / vertical)</option>
+                        <option value="bed_linen">Bed Linen (Single, Double, Queen, King, Super King)</option>
+                        <option value="alpha">Apparel Alpha (XS, S, M, L, XL, XXL, 3XL, 4XL)</option>
+                        <option value="waist_numeric">Waist Numeric — Men (28 to 42)</option>
+                        <option value="waist_numeric_women">Waist Numeric — Women (26 to 40)</option>
+                        <option value="footwear_uk_men">Footwear — UK Men (UK 6 to 12)</option>
+                        <option value="footwear_uk_women">Footwear — UK Women (UK 3 to 9)</option>
+                        <option value="belt_numeric">Belts (28 to 42, Free Size)</option>
+                        <option value="kids_age">Kids Age (0-6M to 9-10Y)</option>
+                        <option value="free_size">Free Size (One Size Only)</option>
+                        <option value="custom">Custom</option>
+                      </Select>
+                      <p className="-mt-3 text-[11px] text-hive-text-muted">
+                        Determines the size options shown to sellers when listing into this category.
+                        Choose Bed Linen for bedsheets, Alpha for apparel, or leave Auto.
                       </p>
 
                       <div className="flex flex-col gap-1.5">

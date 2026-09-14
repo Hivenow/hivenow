@@ -25,6 +25,7 @@ export const DEFAULT_FILTER_STATE: CatalogFilterState = {
 };
 
 export const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "Free Size"] as const;
+export const BED_LINEN_SIZES = ["Single", "Double", "Queen", "King", "Super King"] as const;
 
 export const PRICE_MIN = 0;
 export const PRICE_MAX = 10000;

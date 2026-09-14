@@ -210,7 +210,37 @@ export function getUniversalSizeChart(
   );
   const profileType = resolved.measurementProfile.type;
 
-  // 1. Free-size garments (Sarees, Dupattas, Kasavu)
+  // 1. Bed Linen (Single, Double, Queen, King, Super King)
+  if (
+    resolved.sizeSystem === "bed_linen" ||
+    productName.toLowerCase().includes("bedsheet") ||
+    sizes.some((s) => ["single", "double", "queen", "king", "super king"].includes(s.toLowerCase()))
+  ) {
+    const bedStandardMap: Record<string, { length: string; width: string }> = {
+      Single: { length: '90"', width: '60"' },
+      Double: { length: '100"', width: '90"' },
+      Queen: { length: '108"', width: '90"' },
+      King: { length: '108"', width: '108"' },
+      "Super King": { length: '120"', width: '108"' },
+    };
+    const activeSizes = sizes.length > 0 ? sizes : ["Single", "Double", "Queen", "King"];
+    return activeSizes.map((sz) => {
+      const match = bedStandardMap[sz] || { length: "Standard", width: "Standard" };
+      return {
+        size: sz,
+        chest: "N/A",
+        waist: "N/A",
+        shoulder: "N/A",
+        length: match.length,
+        width: match.width,
+        hip: "N/A",
+        fitType: "Bed Linen",
+        stretch: "None",
+      };
+    });
+  }
+
+  // 2. Free-size garments (Sarees, Dupattas, Kasavu)
   if (profileType === "free_size" || sizes.some(isFreeSizeLiteral) || productName.toLowerCase().includes("saree") || productName.toLowerCase().includes("kasavu")) {
     const s: string = sizes.find(isFreeSizeLiteral) ?? sizes[0] ?? "Free Size";
     return [

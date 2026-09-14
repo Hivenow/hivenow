@@ -7,7 +7,7 @@ import { getPublicUrl } from "./media/api";
 import { v } from "convex/values";
 import { requireRole } from "./lib/auth";
 import { validateUploadedFile } from "./lib/uploads";
-import { ImageAsset, VerticalTypeValidator } from "./schema";
+import { ImageAsset, VerticalTypeValidator, SizeSystemValidator } from "./schema";
 import {
   isProductGloballyEligible,
   resolveDeliverableBoutiqueIds,
@@ -182,6 +182,7 @@ export const createCategory = mutation({
     seoIntro: v.optional(v.string()),
     seoDescription: v.optional(v.string()),
     verticalType: v.optional(VerticalTypeValidator),
+    sizeSystem: v.optional(SizeSystemValidator),
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, "admin");
@@ -223,6 +224,7 @@ export const createCategory = mutation({
       seoIntro: args.seoIntro,
       seoDescription: args.seoDescription,
       verticalType: args.verticalType,
+      sizeSystem: args.sizeSystem,
       createdAt: Date.now(),
     });
     return categoryId;
@@ -254,6 +256,7 @@ export const updateCategory = mutation({
     seoIntro: v.optional(v.string()),
     seoDescription: v.optional(v.string()),
     verticalType: v.optional(VerticalTypeValidator),
+    sizeSystem: v.optional(SizeSystemValidator),
   },
   handler: async (ctx, args) => {
     await requireRole(ctx, "admin");
@@ -319,6 +322,7 @@ export const updateCategory = mutation({
       seoIntro: args.seoIntro,
       seoDescription: args.seoDescription,
       verticalType: args.verticalType,
+      sizeSystem: args.sizeSystem,
     });
     return args.id;
   },
@@ -608,6 +612,119 @@ export const getCategoryHierarchy = query({
       roots: resultRoots,
       totalGlobalCount,
       totalServiceableCount,
+    };
+  },
+});
+
+/**
+ * Seed or update the Bedsheet category with bed_linen sizing and proper attributes schema.
+ */
+export const seedBedsheetAttributes = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const bedsheet = await ctx.db
+      .query("categories")
+      .withIndex("by_slug", (q) => q.eq("slug", "bedsheet"))
+      .first();
+
+    if (!bedsheet) {
+      return { success: false, reason: "Bedsheet category not found" };
+    }
+
+    await ctx.db.patch(bedsheet._id, {
+      sizeSystem: "bed_linen",
+      isFreeSize: false,
+    });
+
+    const bedsheetFields = [
+      {
+        key: "fabric",
+        label: "Fabric / Material",
+        type: "select" as const,
+        options: ["100% Cotton", "Pure Cotton", "Linen", "Satin", "Egyptian Cotton", "Microfiber", "Cotton Blend", "Silk"],
+        required: true,
+        unit: undefined,
+        helpText: "Fabric composition",
+      },
+      {
+        key: "threadCount",
+        label: "Thread Count",
+        type: "number" as const,
+        options: undefined,
+        required: false,
+        unit: "TC",
+        helpText: "e.g. 180, 210, 300, 400",
+      },
+      {
+        key: "sheetType",
+        label: "Sheet Type",
+        type: "select" as const,
+        options: ["Flat", "Fitted (Elastic)", "Fitted with Flat Set"],
+        required: true,
+        unit: undefined,
+        helpText: "Flat or fitted elastic sheet",
+      },
+      {
+        key: "pillowCovers",
+        label: "Pillow Covers Included",
+        type: "select" as const,
+        options: ["None", "1 Pillow Cover", "2 Pillow Covers", "4 Pillow Covers"],
+        required: true,
+        unit: undefined,
+        helpText: "Number of pillow covers included in pack",
+      },
+      {
+        key: "dimensions",
+        label: "Dimensions",
+        type: "text" as const,
+        options: undefined,
+        required: false,
+        unit: undefined,
+        helpText: "e.g. 90 x 100 inches / 228 x 254 cm",
+      },
+      {
+        key: "pattern",
+        label: "Pattern / Print",
+        type: "select" as const,
+        options: ["Solid / Plain", "Floral", "Geometric", "Striped", "Abstract", "Traditional / Ethnic", "Polka Dots", "Embroidered"],
+        required: false,
+        unit: undefined,
+        helpText: undefined,
+      },
+      {
+        key: "careInstructions",
+        label: "Care Instructions",
+        type: "text" as const,
+        options: undefined,
+        required: false,
+        unit: undefined,
+        helpText: "e.g. Machine wash cold, gentle cycle, tumble dry low",
+      },
+    ];
+
+    const existing = await ctx.db
+      .query("attributeSets")
+      .withIndex("by_categoryId", (q) => q.eq("categoryId", bedsheet._id))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        fields: bedsheetFields,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("attributeSets", {
+        categoryId: bedsheet._id,
+        fields: bedsheetFields,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return {
+      success: true,
+      categoryId: bedsheet._id,
+      fieldCount: bedsheetFields.length,
+      sizeSystem: "bed_linen",
     };
   },
 });

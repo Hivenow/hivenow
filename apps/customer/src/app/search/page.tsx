@@ -223,7 +223,7 @@ function SearchContent() {
               Search Collections & Styles
             </h3>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
-              Explore sarees, kurtis, co-ords, or handpicked designer labels.
+              Explore sarees, kurtis, bedsheets, men&apos;s wear, kids wear, and designer labels.
             </p>
             <Button
               variant="primary"

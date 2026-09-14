@@ -14,6 +14,7 @@ import {
   PRICE_MAX,
   PRICE_PRESETS,
   countActiveFilters,
+  BED_LINEN_SIZES,
 } from "@/lib/catalogFilters";
 import { toQueryCoords } from "@/lib/distance";
 import { FilterTabKey } from "./CatalogToolbar";
@@ -432,28 +433,55 @@ export const MobileFilterDrawer: React.FC<MobileFilterDrawerProps> = ({
 
             {/* 2. Size Options (No fake counts) */}
             {activeTab === "size" && (
-              <div className="space-y-4">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
-                  Select Size
+              <div className="space-y-5">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-2.5">
+                    Apparel Sizes
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STANDARD_SIZES.map((size) => {
+                      const isSelected = (draftFilters.sizes || []).includes(size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`h-11 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all duration-150 cursor-pointer ${
+                            isSelected
+                              ? "bg-stone-900 border-stone-900 text-white shadow-xs"
+                              : "bg-white border-stone-200 text-stone-800 hover:border-stone-400"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {STANDARD_SIZES.map((size) => {
-                    const isSelected = (draftFilters.sizes || []).includes(size);
-                    return (
-                      <button
-                        key={size}
-                        type="button"
-                        onClick={() => toggleSize(size)}
-                        className={`h-11 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all duration-150 cursor-pointer ${
-                          isSelected
-                            ? "bg-stone-900 border-stone-900 text-white shadow-xs"
-                            : "bg-white border-stone-200 text-stone-800 hover:border-stone-400"
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    );
-                  })}
+
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-2.5">
+                    Bed Linen Sizes
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {BED_LINEN_SIZES.map((size) => {
+                      const isSelected = (draftFilters.sizes || []).includes(size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => toggleSize(size)}
+                          className={`h-11 rounded-xl border text-xs font-semibold flex items-center justify-center transition-all duration-150 cursor-pointer ${
+                            isSelected
+                              ? "bg-stone-900 border-stone-900 text-white shadow-xs"
+                              : "bg-white border-stone-200 text-stone-800 hover:border-stone-400"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}

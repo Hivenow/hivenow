@@ -120,12 +120,13 @@ export const Navbar: React.FC = () => {
   }, [searchOpen]);
   // Dynamic 2-second placeholder keywords loop
   const keywords = [
-    'Search "Kurtis"',
-    'Search "Sarees"',
-    'Search "Lehengas"',
-    'Search "Salwar Sets"',
-    'Search "Western Wear"',
-    'Search "Local Boutiques"'
+    'Search "Women\'s Fashion"',
+    'Search "Kurtis & Sarees"',
+    'Search "Men\'s Wear"',
+    'Search "Kids Wear"',
+    'Search "Bedsheets & Linen"',
+    'Search "Handbags & Accessories"',
+    'Search "Dresses & Co-ords"',
   ];
   // `keywords[0]` is string | undefined under noUncheckedIndexedAccess, which
   // would make the whole state optional and break the indexOf below.
@@ -1021,7 +1022,7 @@ export const Navbar: React.FC = () => {
                   Trending Searches
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  {["Sarees", "Kurtis", "Lehengas", "Co-ords", "Festive Sets", "Party Wear", "Designer Dresses", "Handlooms"].map((chip) => (
+                  {["Sarees", "Kurtis", "Men's Wear", "Kids Wear", "Bedsheets", "Handbags", "Dresses", "Co-ords"].map((chip) => (
                     <button
                       key={chip}
                       type="button"

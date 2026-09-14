@@ -443,6 +443,7 @@ export type SizeSystemType =
   | "free_size"
   | "belt_numeric"
   | "kids_age"
+  | "bed_linen"
   | "custom";
 
 export interface FitSilhouetteOption {
@@ -499,6 +500,7 @@ export const SIZING_PRESETS: Readonly<Record<SizeSystemType, readonly string[]>>
   free_size:            ["Free Size"],
   alpha:                ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "Free"],
   kids_age:             ["0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y", "7-8Y", "9-10Y"],
+  bed_linen:            ["Single", "Double", "Queen", "King", "Super King"],
   custom:               ["Standard", "Free Size"],
 };
 
@@ -619,6 +621,20 @@ export function resolveCategorySizing(
       catSlug === "hats-caps"
     ) {
       sizeSystem = "free_size";
+    }
+    // Home linen & bedsheets
+    else if (
+      catSlug === "bedsheet" ||
+      catSlug === "bedsheets" ||
+      catSlug.includes("bedsheet") ||
+      catSlug.includes("bed-linen") ||
+      catSlug.includes("bedding") ||
+      catName.includes("bedsheet") ||
+      catName.includes("bed sheet") ||
+      catName.includes("bedding") ||
+      catName.includes("bed linen")
+    ) {
+      sizeSystem = "bed_linen";
     }
     // Keyword heuristics for new/unlisted categories
     else if (
@@ -777,6 +793,8 @@ export function resolveCategorySizing(
     axisUnit = "UK";
   } else if (sizeSystem === "kids_age") {
     axisLabel = "Age / Size";
+  } else if (sizeSystem === "bed_linen") {
+    axisLabel = "Bed Size";
   } else if (effectiveVertical === "fragrance") {
     axisLabel = "Volume";
     axisUnit = "ml";

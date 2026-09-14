@@ -580,6 +580,16 @@ check("Accessories Belts does not show garment fit widget", belts.fitOptions.sho
 check("Accessories Belts measurement profile is none", belts.measurementProfile.type, "none");
 check("Accessories Belts requiresMeasurements is false", belts.variant.requiresMeasurements, false);
 
+// 4b. Accessories Bedsheet -> bed_linen + Bed Size label + Single..Super King
+const bedsheet = resolveCategorySizing(
+  { slug: "bedsheet", name: "Bedsheet", verticalType: "lifestyle" },
+  { slug: "accessories", name: "Accessories" }
+);
+check("Accessories Bedsheet sizeSystem is bed_linen", bedsheet.sizeSystem, "bed_linen");
+check("Accessories Bedsheet variant label is Bed Size", bedsheet.variant.label, "Bed Size");
+check("Accessories Bedsheet defaultOptions is Single..Super King", bedsheet.variant.defaultOptions, SIZING_PRESETS.bed_linen);
+check("Accessories Bedsheet does not show garment fit widget", bedsheet.fitOptions.showGarmentFitWidget, false);
+
 // 5. Explicit category.sizeSystem override (Tier 1 precedence)
 const overridden = resolveCategorySizing(
   { slug: "mens-jeans", name: "Jeans", sizeSystem: "custom", verticalType: "apparel" }

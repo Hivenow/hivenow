@@ -67,6 +67,18 @@ const PRESETS: Record<string, { label: string; fields: AttributeFieldDraft[] }> 
       { key: "strapType", label: "Strap / Handle", type: "select", options: ["Adjustable", "Fixed", "Detachable", "Chain", "None"], required: false, unit: "", helpText: "" },
     ],
   },
+  bedsheet: {
+    label: "Bedsheet / Linen",
+    fields: [
+      { key: "fabric", label: "Fabric / Material", type: "select", options: ["100% Cotton", "Pure Cotton", "Linen", "Satin", "Egyptian Cotton", "Microfiber", "Cotton Blend", "Silk"], required: true, unit: "", helpText: "Fabric composition" },
+      { key: "threadCount", label: "Thread Count", type: "number", options: [], required: false, unit: "TC", helpText: "e.g. 180, 210, 300, 400" },
+      { key: "sheetType", label: "Sheet Type", type: "select", options: ["Flat", "Fitted (Elastic)", "Fitted with Flat Set"], required: true, unit: "", helpText: "Flat or fitted elastic sheet" },
+      { key: "pillowCovers", label: "Pillow Covers Included", type: "select", options: ["None", "1 Pillow Cover", "2 Pillow Covers", "4 Pillow Covers"], required: true, unit: "", helpText: "Number of pillow covers included in pack" },
+      { key: "dimensions", label: "Dimensions", type: "text", options: [], required: false, unit: "", helpText: "e.g. 90 x 100 inches / 228 x 254 cm" },
+      { key: "pattern", label: "Pattern / Print", type: "select", options: ["Solid / Plain", "Floral", "Geometric", "Striped", "Abstract", "Traditional / Ethnic", "Polka Dots", "Embroidered"], required: false, unit: "", helpText: "" },
+      { key: "careInstructions", label: "Care Instructions", type: "text", options: [], required: false, unit: "", helpText: "e.g. Machine wash cold, gentle cycle, tumble dry low" },
+    ],
+  },
 };
 
 function toCamelKey(label: string): string {
@@ -203,8 +215,8 @@ export function AttributeSchemaEditor({ categoryId, categoryName, verticalLabel 
         </span>
       </div>
 
-      {/* Presets — only offered on an empty schema, so they can never clobber work */}
-      {fields.length === 0 && (
+      {/* Presets — offer on empty schema or as replacement action */}
+      {fields.length === 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-hive-text-muted mr-1">
             Start from
@@ -220,6 +232,52 @@ export function AttributeSchemaEditor({ categoryId, categoryName, verticalLabel 
               <Sparkles className="w-3.5 h-3.5" /> {preset.label}
             </Button>
           ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-hive-cream/20 rounded-xl border border-hive-border/40">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-hive-text-muted mr-1">
+              Replace with preset:
+            </span>
+            {Object.entries(PRESETS).map(([id, preset]) => (
+              <Button
+                key={id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Replace current questions with "${preset.label}" preset? Unsaved changes will be replaced.`
+                    )
+                  ) {
+                    setFields(
+                      preset.fields.map((f) => ({ ...f, options: [...f.options] }))
+                    );
+                  }
+                }}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> {preset.label}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 cursor-pointer"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Clear all questions for this category? If saved empty, this category will revert to built-in vertical defaults."
+                )
+              ) {
+                setFields([]);
+              }
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5 mr-1" /> Clear All
+          </Button>
         </div>
       )}
 
