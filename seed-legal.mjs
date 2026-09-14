@@ -32,7 +32,7 @@ async function processDoc(filename, slug) {
 
 async function run() {
   await processDoc("Hive_Boutique_Partner_Agreement.docx", "partner-agreement");
-  await processDoc("Hive_Privacy_Policy.docx", "privacy-policy");
+  await processDoc("Hive_Privacy_Policy.md", "privacy-policy");
   await processDoc("Hive_Return_and_Refund_Policy.md", "return-policy");
   await processDoc("Hive_Terms_and_Conditions.docx", "terms-and-conditions");
 }
