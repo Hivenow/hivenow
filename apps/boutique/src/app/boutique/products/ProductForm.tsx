@@ -35,12 +35,65 @@ const MATERIAL_OPTIONS = [
  * of the garment-focused default list.
  */
 const MATERIAL_OPTIONS_BY_SLUG: Record<string, string[]> = {
+  // Home & Linen
   bedsheet: [
     "100% Cotton", "Cotton", "Egyptian Cotton", "Linen", "Satin",
     "Microfiber", "Cotton Blend", "Silk", "Bamboo", "Flannel", "Other"
   ],
+  // Leather goods
+  belts: [
+    "Genuine Leather", "Faux Leather", "Canvas", "Fabric",
+    "Suede", "Woven", "Elastic", "Other"
+  ],
+  wallets: [
+    "Genuine Leather", "Faux Leather", "Vegan Leather", "Canvas",
+    "Fabric", "Cork", "Other"
+  ],
+  handbags: [
+    "Genuine Leather", "Faux Leather", "Vegan Leather", "Canvas",
+    "Jute", "Cotton", "Silk", "Suede", "Fabric", "Other"
+  ],
+  // Non-fabric products
+  watches: [
+    "Stainless Steel", "Titanium", "Gold Plated", "Rose Gold",
+    "Ceramic", "Plastic / Resin", "Wood", "Other"
+  ],
+  sunglasses: [
+    "Acetate", "Metal", "Titanium", "TR90 / Nylon",
+    "Polycarbonate", "Wood", "Other"
+  ],
+  jewellery: [
+    "Gold", "Silver", "Brass", "Copper", "Gold Plated",
+    "Silver Plated", "Oxidised Silver", "Kundan", "Pearl", "Other"
+  ],
+  "hair-accessories": [
+    "Metal", "Fabric", "Silk", "Plastic / Acrylic",
+    "Beaded", "Leather", "Rubber", "Other"
+  ],
+  "hats-caps": [
+    "Cotton", "Denim", "Polyester", "Wool", "Straw",
+    "Linen", "Canvas", "Blend", "Other"
+  ],
 };
 const CARE_OPTIONS = ["Dry Clean Only", "Dry Wash", "Machine Wash Cold", "Hand Wash", "Do Not Bleach", "Other"];
+
+/**
+ * Category-specific care instruction overrides. Same pattern as materials —
+ * watches don't need "Machine Wash Cold", jewellery doesn't need "Dry Clean".
+ */
+const CARE_OPTIONS_BY_SLUG: Record<string, string[]> = {
+  // Leather goods
+  belts:    ["Wipe with Damp Cloth", "Use Leather Conditioner", "Avoid Moisture", "Store Flat", "Other"],
+  wallets:  ["Wipe with Damp Cloth", "Use Leather Conditioner", "Avoid Moisture", "Keep in Dust Bag", "Other"],
+  handbags: ["Wipe with Damp Cloth", "Use Leather Conditioner", "Avoid Moisture", "Keep in Dust Bag", "Stuff to Retain Shape", "Other"],
+  // Hard goods
+  watches:    ["Wipe with Soft Cloth", "Avoid Water Exposure", "Store in Box", "Service Annually", "Other"],
+  sunglasses: ["Clean with Microfiber Cloth", "Store in Case", "Avoid Chemicals", "Rinse Under Water", "Other"],
+  jewellery:  ["Avoid Perfume Contact", "Store Separately", "Wipe with Soft Cloth", "Keep Dry", "Anti-Tarnish Storage", "Other"],
+  "hair-accessories": ["Wipe Clean", "Avoid Water", "Store Carefully", "Other"],
+  // Linen
+  bedsheet: ["Machine Wash Cold", "Machine Wash Warm", "Tumble Dry Low", "Line Dry", "Iron Medium Heat", "Do Not Bleach", "Other"],
+};
 
 const FABRIC_CONTENT_OPTIONS = [
   "100% Cotton", "100% Organic Silk", "100% Linen", "50% Silk 50% Cotton",
@@ -2858,7 +2911,10 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                           </button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 py-1 scrollbar-none">
-                          {CARE_OPTIONS.map((c) => (
+                          {(selectedCategoryObj?.slug && CARE_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
+                            ? CARE_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
+                            : CARE_OPTIONS
+                          ).map((c) => (
                             <button
                               key={c}
                               type="button"
@@ -2891,10 +2947,12 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                 // Certain apparel subcategories don't have every garment detail.
                 // Sarees have no neckline or sleeves; dupattas have no hemline.
                 const APPAREL_CHIP_EXCLUSIONS: Record<string, string[]> = {
-                  sarees:   ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
-                  dupattas: ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
-                  stoles:   ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
-                  lehengas: ["neckType", "sleeve", "sleeveStyling"],
+                  sarees:            ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  dupattas:          ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  stoles:            ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  "scarves-stoles":  ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  lehengas:          ["neckType", "sleeve", "sleeveStyling"],
+                  "hats-caps":       ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
                 };
                 const categorySlug = selectedCategoryObj?.slug;
                 const excluded = categorySlug ? APPAREL_CHIP_EXCLUSIONS[categorySlug] ?? [] : [];
