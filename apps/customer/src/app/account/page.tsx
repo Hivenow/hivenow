@@ -699,12 +699,12 @@ function OverviewTab({
               <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-mono font-bold text-stone-900 tracking-wider">
+                    <span className="text-[10px] font-sans font-bold text-stone-900 tracking-wider">
                       {activeOrder.orderNumber}
                     </span>
                     <OrderStatusBadge status={mapOrderStatus(activeOrder.status)} />
                   </div>
-                  <h4 className="text-sm font-serif font-light text-stone-900 truncate">
+                  <h4 className="text-sm font-sans font-semibold text-stone-900 truncate">
                     {activeOrder.items?.[0]?.productName || "Boutique Order"}
                     {activeOrder.items?.length > 1 && (
                       <span className="text-xs text-stone-500 font-sans font-medium">
@@ -761,7 +761,7 @@ function OverviewTab({
             href="https://wa.me/917356019103"
             icon={<MessageCircle className="w-5 h-5 text-emerald-600" />}
             label="Help & Support"
-            meta="Order & fit support on WhatsApp"
+            meta="Order support on WhatsApp"
             hoverBg="group-hover:bg-emerald-50/50"
             hoverText="group-hover:text-emerald-900"
           />
