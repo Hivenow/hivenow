@@ -158,12 +158,27 @@ const nextConfig: NextConfig = {
       // are redirected rather than left to 404.
       {
         source: "/products/ethnic-wer",
-        destination: "/products?category=mens-ethnic-wear",
+        destination: "/products?category=ethnic-wear",
+        permanent: true,
+      },
+      {
+        source: "/products/ethic-wear",
+        destination: "/products?category=ethnic-wear",
+        permanent: true,
+      },
+      {
+        source: "/ethic-wear",
+        destination: "/products?category=ethnic-wear",
+        permanent: true,
+      },
+      {
+        source: "/ethnic-wer",
+        destination: "/products?category=ethnic-wear",
         permanent: true,
       },
       {
         source: "/collections/ethnic-wer",
-        destination: "/products?category=mens-ethnic-wear",
+        destination: "/products?category=ethnic-wear",
         permanent: true,
       },
     ];
