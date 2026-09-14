@@ -2868,24 +2868,42 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
 
               </div>
 
-              {/* Progressive Disclosure: Additional Optional Specifications */}
+              {/* Progressive Disclosure: Apparel-only Optional Specifications.
+                 Non-apparel verticals and DB-driven attribute schemas skip this
+                 block entirely — their fields are handled by SpecificationEditor
+                 or DynamicAttributeFields respectively. */}
+              {!usesDynamicAttributes && currentVerticalConfig.id === "apparel" && (() => {
+                // Certain apparel subcategories don't have every garment detail.
+                // Sarees have no neckline or sleeves; dupattas have no hemline.
+                const APPAREL_CHIP_EXCLUSIONS: Record<string, string[]> = {
+                  sarees:   ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  dupattas: ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  stoles:   ["neckType", "sleeve", "sleeveStyling", "hemline", "shape", "length"],
+                  lehengas: ["neckType", "sleeve", "sleeveStyling"],
+                };
+                const categorySlug = selectedCategoryObj?.slug;
+                const excluded = categorySlug ? APPAREL_CHIP_EXCLUSIONS[categorySlug] ?? [] : [];
+                const apparelChips = [
+                  { id: "fabricType", label: "+ Fabric / Weave" },
+                  { id: "neckType", label: "+ Neck Type" },
+                  { id: "pattern", label: "+ Pattern" },
+                  { id: "sleeve", label: "+ Sleeve Length" },
+                  { id: "sleeveStyling", label: "+ Sleeve Styling" },
+                  { id: "shape", label: "+ Shape" },
+                  { id: "hemline", label: "+ Hemline" },
+                  { id: "length", label: "+ Length" },
+                  { id: "fabricFamily", label: "+ Fabric Family" },
+                ].filter(chip => !excluded.includes(chip.id));
+
+                if (apparelChips.length === 0) return null;
+                return (
               <div className="space-y-2.5 pt-3 border-t border-slate-100">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
                   Add Optional Specifications
                 </label>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { id: "fabricType", label: "+ Fabric / Weave" },
-                    { id: "neckType", label: "+ Neck Type" },
-                    { id: "pattern", label: "+ Pattern" },
-                    { id: "sleeve", label: "+ Sleeve Length" },
-                    { id: "sleeveStyling", label: "+ Sleeve Styling" },
-                    { id: "shape", label: "+ Shape" },
-                    { id: "hemline", label: "+ Hemline" },
-                    { id: "length", label: "+ Length" },
-                    { id: "fabricFamily", label: "+ Fabric Family" },
-                  ].map((chip) => {
+                  {apparelChips.map((chip) => {
                     const isOpen = activeExtraFields.has(chip.id);
                     return (
                       <button
@@ -2905,9 +2923,11 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                   })}
                 </div>
               </div>
+                );
+              })()}
 
-              {/* Expanded Detail Inputs */}
-              {activeExtraFields.size > 0 && (
+              {/* Expanded Detail Inputs — only for apparel without DB-driven attributes */}
+              {!usesDynamicAttributes && currentVerticalConfig.id === "apparel" && activeExtraFields.size > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 animate-in fade-in duration-200">
                   
                   {/* Fabric / Weave */}
