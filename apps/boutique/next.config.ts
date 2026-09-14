@@ -1,3 +1,4 @@
+// Trigger Vercel rebuild for hive-seller / @hive/boutique (v0.0.2 - Sep 14, 2026 - Bedsheet Sizing)
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
 
