@@ -21,7 +21,7 @@ import Cropper from "react-easy-crop";
 import { VariantEditor } from "./VariantEditor";
 import { SpecificationEditor } from "./SpecificationEditor";
 import { DynamicAttributeFields, AttributeFieldDef } from "./DynamicAttributeFields";
-import { getVerticalConfig, resolveCategorySizing, isFreeSizeLiteral } from "@hive/types";
+import { getVerticalConfig, resolveCategorySizing, isFreeSizeLiteral, SizeSystemType } from "@hive/types";
 
 // Constant arrays
 const MATERIAL_OPTIONS = [
@@ -691,6 +691,8 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
     const list: {
       _id: string;
       name: string;
+      slug?: string;
+      sizeSystem?: SizeSystemType;
       verticalType?: string;
       parentId?: string;
       isFreeSize?: boolean;
@@ -705,6 +707,8 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
       list.push({
         _id: c._id,
         name: cleanName,
+        slug: c.slug,
+        sizeSystem: c.sizeSystem,
         verticalType: c.verticalType,
         parentId: c.parentId,
         isFreeSize: c.isFreeSize,
@@ -1103,8 +1107,18 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
         setSelectedSizes(["Free Size"]);
         setStockBySize((prev) => ({ ...prev, "Free Size": prev["Free Size"] || 1 }));
       }
+    } else {
+      // If switching away from a free size category or editing a bed_linen category with legacy "Free Size",
+      // clear stale "Free Size" selection so seller can select proper sizes (Single, Double, Queen, King, Super King)
+      const isOnlyFreeSize = selectedSizes.length === 1 && selectedSizes.some(isFreeSizeLiteral);
+      const isLegacyBedsheetFreeSize = resolvedSizing.sizeSystem === "bed_linen" && isOnlyFreeSize;
+      const isOriginalCategory = productToEdit && productToEdit.categoryId === selectedCategoryObj?._id;
+      if (isOnlyFreeSize && (!isOriginalCategory || isLegacyBedsheetFreeSize)) {
+        setSelectedSizes([]);
+        setStockBySize({});
+      }
     }
-  }, [isFreeSizeCategory, selectedSizes, productToEdit, selectedCategoryObj?._id]);
+  }, [isFreeSizeCategory, selectedSizes, productToEdit, selectedCategoryObj?._id, resolvedSizing.sizeSystem]);
 
   // Load product to edit, or prefill from a sibling colour being used as a
   // template for a new one. Everything reusable is carried over from either
