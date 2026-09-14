@@ -49,8 +49,8 @@ export const Tabs: React.FC<TabsProps> = ({
                 variant === "comb" && isActive && "bg-white text-hive-text shadow-sm font-bold border border-hive-border",
 
                 variant === "pills" &&
-                  "border-none rounded-lg px-4 py-2 text-xs text-slate-600 hover:text-slate-900",
-                variant === "pills" && isActive && "bg-white text-slate-900 shadow-sm font-bold"
+                  "border-none rounded-lg px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-900",
+                variant === "pills" && isActive && "bg-white text-stone-900 shadow-sm font-semibold"
               )}
             >
               {tab.icon && <span className="w-4 h-4">{tab.icon}</span>}

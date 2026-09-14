@@ -427,7 +427,7 @@ function OrderCard({
               )}
             </div>
 
-            <h4 className="text-sm font-serif font-bold text-stone-900 truncate leading-snug">
+            <h4 className="text-sm font-sans font-semibold text-stone-900 truncate leading-snug">
               {firstItem?.productName || "Order"}
               {itemsCount > 1 && (
                 <span className="text-xs text-stone-500 font-sans font-medium"> +{itemsCount - 1} more items</span>
