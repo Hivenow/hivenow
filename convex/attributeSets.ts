@@ -48,7 +48,7 @@ const AttributeFieldValidator = v.object({
   helpText: v.optional(v.string()),
 });
 
-type AttributeField = {
+export type AttributeField = {
   key: string;
   label: string;
   type: "text" | "number" | "select" | "multi-select";
@@ -58,7 +58,11 @@ type AttributeField = {
   helpText?: string;
 };
 
-function validateFields(fields: AttributeField[]) {
+/**
+ * Exported so migrations that seed schemas run exactly the checks the admin
+ * screen does, rather than a copy that could drift.
+ */
+export function validateFields(fields: AttributeField[]) {
   const seen = new Set<string>();
 
   for (const field of fields) {

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./lib/auth";
 import { VerticalTypeValidator } from "./schema";
+import { validateFields, type AttributeField } from "./attributeSets";
 import { getPlatformMarkupRate } from "./pricingHelpers";
 import { calculateProductPricing, DEFAULT_TIER_SLABS, getPlatformConfig, calculateAllInclusivePricePaise } from "./pricingService";
 
@@ -1495,6 +1496,208 @@ export const addPostCardsCategory = internalMutation({
       productChanges: 0,
       note: apply
         ? "Category created. No product was read, moved or re-categorised."
+        : "Dry run. Re-run with \"apply\":true to write.",
+    };
+  },
+});
+
+/**
+ * Seeds attribute schemas for Notebooks and Post Cards, and completes Bedsheet's.
+ *
+ * Notebooks and Post Cards were created without schemas, so the seller form
+ * still asked them garment questions. A schema replaces that form for its
+ * category, governs server-side validation of product details, and is what the
+ * product page reads to show specifications.
+ *
+ * Bedsheet already had a schema but no fabric or care field. The seller form no
+ * longer asks Material and Care for a category with a schema, so without these
+ * a bedsheet's fabric would never be recorded. They copy the admin screen's
+ * Bedsheet / Linen preset.
+ *
+ * A migration rather than admin-screen entry so the exact fields are reviewable
+ * in git. Every resulting field list goes through validateFields, the same
+ * checks the admin mutation applies.
+ *
+ * Idempotent and conservative. A mutation is one transaction, so any abort
+ * leaves nothing half-written.
+ * - Notebooks, Post Cards: created when absent; left alone when already
+ *   identical; aborts when a different schema exists, so an admin's edits are
+ *   never overwritten.
+ * - Bedsheet: adds `fabric` and `careInstructions` only when those keys are
+ *   missing. Existing fields are never changed or removed. Aborts if a required
+ *   field would be added while products in the category lack it.
+ *
+ *   npx convex run --prod migrations:seedStationeryAttributeSchemas
+ *   npx convex run --prod migrations:seedStationeryAttributeSchemas '{"apply":true}'
+ *
+ * Reversal: remove the fields in the category's Attributes tab on the admin
+ * screen, or save an empty list to delete a schema. Removal is blocked for any
+ * key a product already stores.
+ */
+export const seedStationeryAttributeSchemas = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const apply = args.apply === true;
+
+    const NOTEBOOK_FIELDS: AttributeField[] = [
+      { key: "packQuantity",     label: "Pack of",              type: "number", required: true,  unit: "notebooks", helpText: "How many notebooks are in the pack" },
+      { key: "dimensions",       label: "Size (W × H, closed)", type: "text",   required: true,  helpText: "e.g. 12 × 18 cm" },
+      { key: "pagesPerNotebook", label: "Pages per notebook",   type: "number", required: true,  unit: "pages" },
+      { key: "ruling",           label: "Ruling",               type: "select", required: true,  options: ["Unruled", "Ruled", "Dotted", "Grid", "Mixed"] },
+      { key: "paperGsm",         label: "Paper weight",         type: "number", required: false, unit: "GSM", helpText: "e.g. 90" },
+      { key: "paperType",        label: "Paper",                type: "text",   required: false, helpText: "e.g. Natural Shade Maplitho" },
+      { key: "binding",          label: "Binding",              type: "select", required: true,  options: ["Centre Stitched", "Perfect Bound", "Spiral / Wiro", "Section Sewn", "Hardbound"] },
+      { key: "coverType",        label: "Cover",                type: "select", required: false, options: ["Softcover", "Hardcover"] },
+      { key: "coverStock",       label: "Cover paper / print",  type: "text",   required: false, helpText: "e.g. Single-side four-colour print on Rendezvous Super White" },
+      { key: "designTheme",      label: "Design / collection",  type: "text",   required: false, helpText: "e.g. Florals of Kerala" },
+      { key: "color",            label: "Colour",               type: "text",   required: false, helpText: "e.g. Multicolour" },
+    ];
+
+    const POST_CARD_FIELDS: AttributeField[] = [
+      { key: "packQuantity",     label: "Pack of",              type: "number", required: true,  unit: "cards", helpText: "How many cards are in the pack" },
+      { key: "dimensions",       label: "Size",                 type: "text",   required: true,  helpText: "e.g. A6 / 10.5 × 14.8 cm" },
+      { key: "paperGsm",         label: "Card weight",          type: "number", required: false, unit: "GSM", helpText: "e.g. 300" },
+      { key: "finish",           label: "Finish",               type: "select", required: false, options: ["Matte", "Gloss", "Uncoated", "Textured"] },
+      { key: "printSides",       label: "Printing",             type: "select", required: true,  options: ["Single-sided", "Double-sided"] },
+      { key: "envelopeIncluded", label: "Envelopes included",   type: "select", required: false, options: ["Yes", "No"] },
+      { key: "designTheme",      label: "Design / collection",  type: "text",   required: false },
+      { key: "color",            label: "Colour",               type: "text",   required: false, helpText: "e.g. Multicolour" },
+    ];
+
+    // Copied from the admin screen's Bedsheet / Linen preset. Fabric leads, as
+    // it does there; care follows the existing fields.
+    const BEDSHEET_FABRIC: AttributeField = {
+      key: "fabric", label: "Fabric / Material", type: "select", required: true, helpText: "Fabric composition",
+      options: ["100% Cotton", "Pure Cotton", "Linen", "Satin", "Egyptian Cotton", "Microfiber", "Cotton Blend", "Silk"],
+    };
+    const BEDSHEET_CARE: AttributeField = {
+      key: "careInstructions", label: "Care Instructions", type: "text", required: false,
+      helpText: "e.g. Machine wash cold, gentle cycle, tumble dry low",
+    };
+
+    const categoryBySlug = async (slug: string) => {
+      const category = await ctx.db
+        .query("categories")
+        .withIndex("by_slug", (q) => q.eq("slug", slug))
+        .first();
+      if (!category) throw new Error(`Aborted: no category with slug "${slug}".`);
+      return category;
+    };
+
+    const attributeSetFor = (categoryId: Id<"categories">) =>
+      ctx.db
+        .query("attributeSets")
+        .withIndex("by_categoryId", (q) => q.eq("categoryId", categoryId))
+        .first();
+
+    // Field order matters (it is the form and product-page order); property
+    // order inside a field does not.
+    const canonical = (fields: readonly object[]) =>
+      JSON.stringify(
+        fields.map((f) =>
+          Object.fromEntries(
+            Object.entries(f)
+              .filter(([, value]) => value !== undefined)
+              .sort(([a], [b]) => a.localeCompare(b))
+          )
+        )
+      );
+
+    const results: Record<string, unknown>[] = [];
+
+    // ─── Notebooks and Post Cards: whole schemas ─────────────────────────────
+    const wholeSchemas: Array<[string, AttributeField[]]> = [
+      ["notebooks", NOTEBOOK_FIELDS],
+      ["post-cards", POST_CARD_FIELDS],
+    ];
+    for (const [slug, spec] of wholeSchemas) {
+      const category = await categoryBySlug(slug);
+      const fields = validateFields(spec);
+      const existing = await attributeSetFor(category._id);
+
+      if (existing) {
+        if (canonical(existing.fields) === canonical(fields)) {
+          results.push({ category: slug, status: "unchanged", attributeSetId: existing._id });
+          continue;
+        }
+        throw new Error(
+          `Aborted: "${category.name}" already has a different attribute schema (keys: ${existing.fields.map((f) => f.key).join(", ")}). Not overwriting it; reconcile on the admin screen first.`
+        );
+      }
+
+      const id = apply
+        ? await ctx.db.insert("attributeSets", {
+            categoryId: category._id,
+            fields,
+            updatedAt: Date.now(),
+          })
+        : null;
+      results.push({
+        category: slug,
+        status: apply ? "created" : "would_create",
+        attributeSetId: id,
+        categoryId: category._id,
+        fields: fields.map((f) => `${f.key}:${f.type}${f.required ? "*" : ""}${f.unit ? `[${f.unit}]` : ""}`),
+      });
+    }
+
+    // ─── Bedsheet: add fabric and care only ──────────────────────────────────
+    {
+      const category = await categoryBySlug("bedsheet");
+      const existing = await attributeSetFor(category._id);
+      if (!existing) {
+        throw new Error(`Aborted: "${category.name}" has no attribute schema to extend.`);
+      }
+
+      const keys = new Set(existing.fields.map((f) => f.key));
+      const toAdd = [BEDSHEET_FABRIC, BEDSHEET_CARE].filter((f) => !keys.has(f.key));
+
+      if (toAdd.length === 0) {
+        results.push({ category: "bedsheet", status: "unchanged", attributeSetId: existing._id });
+      } else {
+        const addingRequired = toAdd.filter((f) => f.required);
+        if (addingRequired.length > 0) {
+          const products = await ctx.db
+            .query("products")
+            .withIndex("by_categoryId", (q) => q.eq("categoryId", category._id))
+            .collect();
+          const missing = products.filter((p) =>
+            addingRequired.some((f) => !p.details?.[f.key]?.trim())
+          );
+          if (missing.length > 0) {
+            throw new Error(
+              `Aborted: adding required ${addingRequired.map((f) => `"${f.key}"`).join(", ")} would invalidate ${missing.length} existing bedsheet product(s) on their next edit.`
+            );
+          }
+        }
+
+        const merged: AttributeField[] = [
+          ...toAdd.filter((f) => f.key === BEDSHEET_FABRIC.key),
+          ...existing.fields,
+          ...toAdd.filter((f) => f.key === BEDSHEET_CARE.key),
+        ];
+        const fields = validateFields(merged);
+
+        if (apply) {
+          await ctx.db.patch(existing._id, { fields, updatedAt: Date.now() });
+        }
+        results.push({
+          category: "bedsheet",
+          status: apply ? "extended" : "would_extend",
+          attributeSetId: existing._id,
+          adding: toAdd.map((f) => f.key),
+          existingFieldsKept: existing.fields.map((f) => f.key),
+          resultingOrder: fields.map((f) => f.key),
+        });
+      }
+    }
+
+    return {
+      applied: apply,
+      results,
+      productChanges: 0,
+      note: apply
+        ? "Attribute schemas written. No product was moved, re-categorised or modified."
         : "Dry run. Re-run with \"apply\":true to write.",
     };
   },
