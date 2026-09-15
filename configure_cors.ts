@@ -25,6 +25,7 @@ async function configureCors() {
               "https://hivenow.in",
               "https://www.hivenow.in",
               "https://admin.hivenow.in",
+              "https://beelynadmin.hivenow.in",
               "https://boutique.hivenow.in",
               "https://seller.hivenow.in",
               "http://localhost:3000",

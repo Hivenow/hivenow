@@ -121,7 +121,7 @@ export const sendDailyOpsDigest = internalAction({
   args: {},
   handler: async (ctx): Promise<{ success: boolean; date: string; orders: number }> => {
     const metrics: any = await ctx.runQuery(internal.opsDigest.compileDailyMetrics);
-    const adminUrl = process.env.ADMIN_URL || "https://admin.hivenow.in";
+    const adminUrl = process.env.ADMIN_URL || "https://beelynadmin.hivenow.in";
 
     const gmvFormatted = Number(metrics.totalGmvRupees).toLocaleString("en-IN", {
       maximumFractionDigits: 0,
