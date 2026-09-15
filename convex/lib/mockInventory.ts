@@ -5,6 +5,7 @@
 import { GenericDatabaseWriter, GenericDatabaseReader } from "convex/server";
 import { DataModel } from "../_generated/dataModel";
 import { ConvexError } from "convex/values";
+import { normalizeSize, resolveSizeStock, countReservationLocks, computeAvailableStock } from "./inventory";
 
 // P1-3 FIX: Mock products are ONLY available when ENABLE_DEBUG_TOOLS is explicitly "true".
 // In production, this is an empty object — no mock product IDs will ever match.
@@ -46,16 +47,9 @@ const _MOCK_DATA: Record<string, { sizes: string[]; inventory: Record<string, nu
 export const MOCK_INVENTORY: Record<string, { sizes: string[]; inventory: Record<string, number> }> =
   process.env.ENABLE_DEBUG_TOOLS === "true" ? _MOCK_DATA : {};
 
-/**
- * Standardizes size names. Specifically maps "FS" to "Free".
- */
-export function normalizeSize(size: string): string {
-  const upper = size.trim().toUpperCase();
-  if (upper === "FS" || upper === "FREE SIZE") {
-    return "Free";
-  }
-  return size.trim();
-}
+// Size normalization and the stock-minus-reservations rule live in ./inventory so checkout and
+// the cart share one implementation. Re-exported here for existing importers.
+export { normalizeSize };
 
 /**
  * Validates a product size selection and stock level.
@@ -134,44 +128,11 @@ export async function validateProductSizeAndStock(
       );
     }
 
-    let stock = 0;
-    if (productRow.stockBySize[size] !== undefined) {
-      stock = productRow.stockBySize[size];
-    } else if (productRow.stockBySize[normalized] !== undefined) {
-      stock = productRow.stockBySize[normalized];
-    }
-
-    // Fetch active reservations for this product and size to prevent overselling
-    const activeReservations = await db
-      .query("reservations")
-      .withIndex("by_productId_size_status", (q) =>
-        q.eq("productId", productRow!._id).eq("size", size).eq("status", "reservation_active")
-      )
-      .collect();
-
-    const awaitingStore = await db
-      .query("reservations")
-      .withIndex("by_productId_size_status", (q) =>
-        q.eq("productId", productRow!._id).eq("size", size).eq("status", "awaiting_store_confirmation")
-      )
-      .collect();
-
-    const awaitingPayment = await db
-      .query("reservations")
-      .withIndex("by_productId_size_status", (q) =>
-        q.eq("productId", productRow!._id).eq("size", size).eq("status", "awaiting_payment")
-      )
-      .collect();
-
-    const allLocks = [...activeReservations, ...awaitingStore, ...awaitingPayment];
-    
-    // Filter out the excluded reservation if provided (e.g. when the reserver is checking out)
-    const applicableLocks = excludeReservationId 
-      ? allLocks.filter(r => r._id !== excludeReservationId)
-      : allLocks;
-
-    const lockedStock = applicableLocks.length;
-    const availableStock = Math.max(0, stock - lockedStock);
+    // Stock minus units held by other customers' reservations (shared with the cart; see ./inventory).
+    // The reserving customer's own reservation is excluded when they check out.
+    const stock = resolveSizeStock(productRow.stockBySize, size);
+    const lockedStock = await countReservationLocks(db, productRow._id, size, excludeReservationId);
+    const { available: availableStock } = computeAvailableStock(stock, lockedStock);
 
     if (availableStock === 0) {
       if (stock > 0) {
