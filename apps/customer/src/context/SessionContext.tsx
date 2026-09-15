@@ -9,6 +9,8 @@ import { getClientAuth, googleProvider, appleProvider } from "@/lib/firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, browserPopupRedirectResolver } from "firebase/auth";
 import { authPerfLog, logAuthFlowTotalOnce } from "@/lib/authPerf";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "@/lib/safeStorage";
+import { SESSION_OWNER_KEY, shouldClearForSignIn } from "@/lib/sessionOwner";
+import { clearUserScopedState } from "@/lib/userScopedState";
 
 export interface SessionUser {
   /**
@@ -150,6 +152,20 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     firebaseLoading ||
     (isFirebaseAuthenticated && (user === undefined || (!user && !hasSyncedOnce)));
 
+  // The bag, checkout selections and addresses persist in this browser, not on the account.
+  // Record which account owns them, and start clean when a different account signs in — this
+  // also covers a session that ended without an explicit logout (see lib/sessionOwner.ts).
+  // A guest signing in has no previous owner, so their bag carries over.
+  const signedInUserId = user?._id;
+  useEffect(() => {
+    if (!signedInUserId) return;
+    const previousOwnerId = safeGetItem(SESSION_OWNER_KEY);
+    if (shouldClearForSignIn(previousOwnerId, signedInUserId)) {
+      clearUserScopedState();
+    }
+    safeSetItem(SESSION_OWNER_KEY, signedInUserId);
+  }, [signedInUserId]);
+
   // Marks the moment the customer UI can actually treat the customer as authenticated — this is
   // what "Firebase confirmed the OTP" gets turned into after the getMe query resolves. Comparing
   // this timestamp against "Hive user sync completed" above is what tells us whether the
@@ -225,6 +241,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await signOut(getClientAuth());
       setIsGuest(false);
       safeRemoveItem("hive_guest");
+      // Without this the next customer on this browser inherits the bag, checkout selections
+      // and saved addresses. Only after a successful sign-out, so a failed one loses nothing.
+      clearUserScopedState();
+      safeRemoveItem(SESSION_OWNER_KEY);
     } catch (err) {
       console.error("Firebase signOut error:", err);
     }

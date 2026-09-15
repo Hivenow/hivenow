@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem } from "./cart-store";
+import { migrateLegacyItemPrices } from "@/lib/legacyCartPrices";
 
 export interface CheckoutState {
   selectedDate: string | null;
@@ -72,6 +73,19 @@ export const useCheckoutStore = create<CheckoutState>()(
     }),
     {
       name: "hive-checkout-storage",
+      // v1: Buy Now items share the cart's rupee convention; see cart-store and
+      // lib/legacyCartPrices.ts for why v0 snapshots are converted once.
+      version: 1,
+      migrate: (persistedState, version) => {
+        const state = (persistedState ?? {}) as Partial<CheckoutState>;
+        if (version < 1) {
+          return {
+            ...state,
+            checkoutItems: migrateLegacyItemPrices<CartItem>(state.checkoutItems),
+          } as CheckoutState;
+        }
+        return state as CheckoutState;
+      },
     }
   )
 );

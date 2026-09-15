@@ -133,7 +133,7 @@ export const CartItemComponent: React.FC<CartItemProps> = ({ item }) => {
         <div className="flex items-center justify-between mt-2.5">
           {/* Price */}
           <span className="text-xs font-bold text-stone-900">
-            {formatRupees(item.price > 10000 ? Math.round(item.price / 100) : item.price)}
+            {formatRupees(item.price)}
           </span>
 
           {/* Quantity selector or Reserved status */}

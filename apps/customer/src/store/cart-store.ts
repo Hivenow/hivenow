@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { migrateLegacyItemPrices } from "@/lib/legacyCartPrices";
 
 export interface CartItem {
   productId: string;
@@ -39,14 +40,12 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
       addItem: (newItem) => {
-        const rawPrice = newItem.price;
-        const normalizedPrice = rawPrice > 10000 ? Math.round(rawPrice / 100) : rawPrice;
+        // Prices are rupees and stored as given. The store used to guess the unit (anything
+        // above 10000 was treated as paise), which turned real ₹10,000+ items into ~₹100.
+        const normalizedPrice = newItem.price;
         const quantity = newItem.quantity ?? 1;
         set((state) => {
-          const sanitizedItems = state.items.map((item) => ({
-            ...item,
-            price: item.price > 10000 ? Math.round(item.price / 100) : item.price,
-          }));
+          const sanitizedItems = state.items;
           const existing = sanitizedItems.find(
             (item) => item.productId === newItem.productId && item.size === newItem.size
           );
@@ -147,10 +146,7 @@ export const useCartStore = create<CartState>()(
         set({ items: [] });
       },
       getCartTotal: () => {
-        return get().items.reduce((total, item) => {
-          const itemPrice = item.price > 10000 ? Math.round(item.price / 100) : item.price;
-          return total + itemPrice * item.quantity;
-        }, 0);
+        return get().items.reduce((total, item) => total + item.price * item.quantity, 0);
       },
       getCartCount: () => {
         return get().items.reduce((count, item) => count + item.quantity, 0);
@@ -158,6 +154,16 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "hive-cart-storage",
+      // v1: prices are stored in rupees without unit guessing. v0 snapshots get the old
+      // conversion applied once on rehydrate (lib/legacyCartPrices.ts).
+      version: 1,
+      migrate: (persistedState, version) => {
+        const state = (persistedState ?? {}) as Partial<CartState>;
+        if (version < 1) {
+          return { ...state, items: migrateLegacyItemPrices<CartItem>(state.items) } as CartState;
+        }
+        return state as CartState;
+      },
     }
   )
 );

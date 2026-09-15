@@ -196,15 +196,11 @@ export default function CheckoutAddressPage() {
 
   useEffect(() => {
     if (reservation && urlResId && (!checkoutItems.length || checkoutItems[0]?.reservationId !== urlResId)) {
-      const normalizedPrice =
-        reservation.priceAtReserve > 10000
-          ? Math.round(reservation.priceAtReserve / 100)
-          : reservation.priceAtReserve;
-
       setCheckoutItems([{
         productId: reservation.productId,
         size: reservation.size,
-        price: normalizedPrice,
+        // Already rupees: reservations.getReservationById normalises priceAtReserve server-side.
+        price: reservation.priceAtReserve,
         name: reservation.productName,
         imageUrl: reservation.productImageUrl,
         boutiqueName: reservation.boutiqueName,

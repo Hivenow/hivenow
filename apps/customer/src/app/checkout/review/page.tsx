@@ -191,16 +191,14 @@ export default function OrderReviewPage() {
   const selectedAddress = addresses.find((addr) => addr.id === selectedAddressId) || null;
 
   const orderItems = getEffectiveCheckoutItems(items, checkoutItems);
-  const rawSubtotal = orderItems.reduce((total, item) => {
-    const itemPrice = item.price > 10000 ? Math.round(item.price / 100) : item.price;
-    return total + itemPrice * item.quantity;
-  }, 0);
+  // Cart and Buy Now items are stored in rupees (see lib/legacyCartPrices.ts).
+  const rawSubtotal = orderItems.reduce((total, item) => total + item.price * item.quantity, 0);
 
   const itemsForPricing = useMemo(() => {
     return orderItems.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
-      price: item.price > 10000 ? Math.round(item.price / 100) : item.price,
+      price: item.price,
       size: item.size,
     }));
   }, [orderItems]);
@@ -772,7 +770,7 @@ export default function OrderReviewPage() {
               <div className="divide-y divide-hive-border/30 flex flex-col">
                 {orderItems.map((item) => {
                   const backendItem = backendPricing?.items?.find((b: any) => b.productId === item.productId);
-                  const effectivePrice = backendItem?.allInclusivePriceRupees ?? backendItem?.priceAtPurchaseRupees ?? (item.price > 10000 ? Math.round(item.price / 100) : item.price);
+                  const effectivePrice = backendItem?.allInclusivePriceRupees ?? backendItem?.priceAtPurchaseRupees ?? item.price;
                   return (
                   <div key={`${item.productId}-${item.size}`} className="flex gap-4 py-4 first:pt-0 last:pb-0">
                     <div className="relative w-14 h-18 rounded-lg overflow-hidden bg-hive-cream/30 border border-hive-border/20 flex-shrink-0">
