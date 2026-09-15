@@ -690,11 +690,10 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
     url: string;
     file?: File;
     storageId?: string;
-    cropSettings?: { zoom: number; x: number; y: number; aspect: "1:1" | "4:5" | "original"; croppedAreaPixels?: any };
+    cropSettings?: { zoom: number; x: number; y: number; croppedAreaPixels?: any };
   }[]>([]);
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState<number>(0);
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
-  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 1, height: 1 });
   const [croppingInProgress, setCroppingInProgress] = useState(false);
 
   // Sizes & Fit State
@@ -1029,7 +1028,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
           url: item.file ? URL.createObjectURL(item.file) : (item.storageId || ""),
           file: item.file,
           storageId: item.storageId,
-          cropSettings: item.cropSettings || { zoom: 1, x: 0, y: 0, aspect: "1:1" as const },
+          cropSettings: item.cropSettings || { zoom: 1, x: 0, y: 0 },
         }));
         setLocalPreviews(restored);
       }
@@ -1305,18 +1304,18 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
     const newPreviews = filesToAdd.map((file) => ({
       url: URL.createObjectURL(file),
       file,
-      cropSettings: { zoom: 1, x: 0, y: 0, aspect: "1:1" as const },
+      cropSettings: { zoom: 1, x: 0, y: 0 },
     }));
 
     setLocalPreviews((prev) => [...prev, ...newPreviews]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const updateActiveCrop = (updates: Partial<{ zoom: number; x: number; y: number; aspect: "1:1" | "4:5" | "original"; croppedAreaPixels?: any }>) => {
+  const updateActiveCrop = (updates: Partial<{ zoom: number; x: number; y: number; croppedAreaPixels?: any }>) => {
     setLocalPreviews((prev) => {
       const next = [...prev];
       if (next[selectedPreviewIndex]) {
-        const currentSettings = next[selectedPreviewIndex].cropSettings || { zoom: 1, x: 0, y: 0, aspect: "1:1" as const };
+        const currentSettings = next[selectedPreviewIndex].cropSettings || { zoom: 1, x: 0, y: 0 };
         next[selectedPreviewIndex] = {
           ...next[selectedPreviewIndex],
           cropSettings: {
@@ -1839,16 +1838,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
   if (currentStep === 1) {
     const canGoNext = localPreviews.length >= 3;
     const activePreview = localPreviews[selectedPreviewIndex];
-    const cropSettings = activePreview?.cropSettings || { zoom: 1, x: 0, y: 0, aspect: "1:1" as const };
-
-    const getViewportHeight = () => {
-      if (cropSettings.aspect === "4:5") return 500;
-      if (cropSettings.aspect === "original" && imageNaturalSize.width > 0) {
-        const aspect = imageNaturalSize.width / imageNaturalSize.height;
-        return Math.round(400 / aspect);
-      }
-      return 400; // default 1:1
-    };
+    const cropSettings = activePreview?.cropSettings || { zoom: 1, x: 0, y: 0 };
 
     return (
       <div className="fixed inset-0 bg-white z-[100] flex flex-col font-sans overflow-hidden animate-in fade-in duration-200">
@@ -1912,7 +1902,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
             <div
               className="w-full relative bg-slate-950 overflow-hidden flex items-center justify-center rounded-xl shadow-inner select-none"
               style={{
-                height: `${getViewportHeight()}px`,
+                height: "400px",
                 maxWidth: "400px"
               }}
             >
@@ -1922,11 +1912,10 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                     image={activePreview.url}
                     crop={{ x: cropSettings.x || 0, y: cropSettings.y || 0 }}
                     zoom={cropSettings.zoom || 1}
-                    aspect={cropSettings.aspect === "4:5" ? 4 / 5 : cropSettings.aspect === "original" ? (imageNaturalSize.width / imageNaturalSize.height || 1) : 1}
+                    aspect={1}
                     onCropChange={(crop) => updateActiveCrop({ x: crop.x, y: crop.y })}
                     onZoomChange={(zoom) => updateActiveCrop({ zoom })}
                     onCropComplete={(croppedArea, croppedAreaPixels) => updateActiveCrop({ croppedAreaPixels })}
-                    onMediaLoaded={(mediaSize) => setImageNaturalSize({ width: mediaSize.naturalWidth, height: mediaSize.naturalHeight })}
                   />
                 </div>
               ) : (
@@ -1946,22 +1935,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                 </div>
               )}
 
-              {/* Aspect Ratio Button Overlay */}
-              {activePreview && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextAspect = cropSettings.aspect === "1:1" ? "4:5" : cropSettings.aspect === "4:5" ? "original" : "1:1";
-                    updateActiveCrop({ aspect: nextAspect, x: 0, y: 0 });
-                  }}
-                  className="absolute bottom-3 left-3 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-all cursor-pointer shadow-md select-none active:scale-95 border border-white/10"
-                  title="Toggle Aspect Ratio"
-                >
-                  <span className="text-[9px] font-bold tracking-tighter uppercase">
-                    {cropSettings.aspect === "1:1" ? "1:1" : cropSettings.aspect === "4:5" ? "4:5" : "Orig"}
-                  </span>
-                </button>
-              )}
+
             </div>
           </div>
 
@@ -2068,7 +2042,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
           </div>
 
           {/* Gallery Photo Grid */}
-          <div className="p-4 pb-24 sm:pb-12 bg-white">
+          <div className="p-4 bg-white">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               
               {/* Upload Button Tile */}
@@ -2130,60 +2104,59 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
               })}
             </div>
           </div>
-        </div>
+          {/* Bottom Action Footer — inline, scrolls with content */}
+          <div className="px-5 py-5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex flex-col xs:flex-row items-start xs:items-center gap-2.5 sm:gap-3">
+              <span className="text-xs font-medium text-slate-500 font-sans">
+                {localPreviews.length} of 3 required photos selected
+              </span>
+              {/* Photo Source Selector */}
+              <div className="flex items-center gap-1 bg-slate-100/90 p-0.5 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setPhotoSource("in_store")}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95",
+                    photoSource === "in_store"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  Original Photos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhotoSource("ai_enhanced")}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95",
+                    photoSource === "ai_enhanced"
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  AI Generated
+                </button>
+              </div>
+            </div>
 
-        {/* Bottom Action Footer */}
-        <div className="px-5 py-3.5 bg-white border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0 z-20 pb-safe">
-          <div className="flex flex-col xs:flex-row items-start xs:items-center gap-2.5 sm:gap-3">
-            <span className="text-xs font-medium text-slate-500 font-sans">
-              {localPreviews.length} of 3 required photos selected
-            </span>
-            {/* Photo Source Selector */}
-            <div className="flex items-center gap-1 bg-slate-100/90 p-0.5 rounded-xl">
+            <div className="flex justify-end w-full sm:w-auto">
               <button
                 type="button"
-                onClick={() => setPhotoSource("in_store")}
+                onClick={handleStep1Next}
+                disabled={!canGoNext || croppingInProgress}
                 className={cn(
-                  "px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95",
-                  photoSource === "in_store"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
+                  "text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 select-none",
+                  canGoNext && !croppingInProgress
+                    ? "bg-slate-950 hover:bg-slate-900 text-white cursor-pointer active:scale-[0.98] shadow-xs" 
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
                 )}
               >
-                <Camera className="w-3.5 h-3.5" />
-                Original Photos
-              </button>
-              <button
-                type="button"
-                onClick={() => setPhotoSource("ai_enhanced")}
-                className={cn(
-                  "px-3 py-2 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95",
-                  photoSource === "ai_enhanced"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                <Bot className="w-3.5 h-3.5" />
-                AI Generated
+                <span>Continue</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
-
-          <div className="flex justify-end w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={handleStep1Next}
-              disabled={!canGoNext || croppingInProgress}
-              className={cn(
-                "text-xs font-bold uppercase tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 select-none",
-                canGoNext && !croppingInProgress
-                  ? "bg-slate-950 hover:bg-slate-900 text-white cursor-pointer active:scale-[0.98] shadow-xs" 
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              )}
-            >
-              <span>Continue</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
