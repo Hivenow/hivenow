@@ -526,7 +526,9 @@ const productFormSchema = z.object({
   care: z.string().optional(),
   customCare: z.string().optional(),
   fabricType: z.string().optional(),
-  color: z.string().min(1, "Please enter the color"),
+  // Required only when the category has no attribute schema; enforced in
+  // handleStep2Next, which knows the category. A schema owns its own fields.
+  color: z.string().optional(),
   fabricContent: z.string().optional(),
   fabricDetail: z.string().optional(),
   neckType: z.string().optional(),
@@ -823,6 +825,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
     watch,
     getValues,
     trigger,
+    setError,
     formState: { errors },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -1539,9 +1542,21 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
   };
 
   const handleStep2Next = async () => {
-    const valid = await trigger(["categoryId", "name", "color", "price"]);
-    if (!valid) {
-      toast.error("Missing Details", "Please fill in the category, product name, color, and price to continue.");
+    const valid = await trigger(["categoryId", "name", "price"]);
+    // Colour is asked here only for categories on the built-in form. A category
+    // with an attribute schema asks for it in Step 4 if, and only if, the schema
+    // defines it -- the server rejects a colour the schema does not list.
+    const colorMissing = !usesDynamicAttributes && !getValues("color")?.trim();
+    if (colorMissing) {
+      setError("color", { type: "required", message: "Please enter the color" });
+    }
+    if (!valid || colorMissing) {
+      toast.error(
+        "Missing Details",
+        usesDynamicAttributes
+          ? "Please fill in the category, product name, and price to continue."
+          : "Please fill in the category, product name, color, and price to continue."
+      );
       return;
     }
     goToStep(3);
@@ -1671,9 +1686,12 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
       const finalDescription = data.description.trim();
 
       // Build details payload sanitized against the active vertical
-      const cleanedDetails: Record<string, string> = {
-        color: data.color || "",
-      };
+      // On the built-in path colour is always sent. On a schema category it is
+      // sent only through the schema's own fields below: createProduct validates
+      // details against the schema and rejects any key the schema does not list.
+      const cleanedDetails: Record<string, string> = usesDynamicAttributes
+        ? {}
+        : { color: data.color || "" };
 
       if (currentVerticalConfig.id === "apparel") {
         if (data.fabricType) cleanedDetails.fabricType = autoCorrectCapitalization(data.fabricType);
@@ -2502,6 +2520,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
 
               {/* Color & Price Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {!usesDynamicAttributes && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Color *</label>
                   <input
@@ -2520,6 +2539,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                   />
                   {errors.color && <span className="text-red-500 text-xs font-medium">{errors.color.message}</span>}
                 </div>
+                )}
 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Your Base Price (₹) *</label>
@@ -2677,6 +2697,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
               onIncrementStock={incrementStock}
               onDecrementStock={decrementStock}
               isFreeSizeCategory={isFreeSizeCategory}
+              isApparel={currentVerticalConfig.id === "apparel"}
               fitRecommendation={fitRecommendation}
               onFitRecommendationChange={setFitRecommendation}
               silhouette={silhouette}
@@ -2763,6 +2784,8 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                       ? "Describe the olfactory character, projection, longevity, and ideal wearing occasions..."
                       : currentVerticalConfig.id === "handbag"
                       ? "Describe the silhouette, leather/fabric finish, compartment layout, and carry options..."
+                      : currentVerticalConfig.id === "lifestyle"
+                      ? "Describe what it is, what's included, size, materials, and how it's best used..."
                       : "Describe the silhouette, fabric feel, work details, or occasion styling tips..."
                   }
                   {...register("description")}
@@ -2790,7 +2813,11 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                 {errors.description && <span className="text-red-500 text-xs font-medium">{errors.description.message}</span>}
               </div>
 
-              {/* Material & Care Instructions — ALWAYS VISIBLE & MANDATORY */}
+              {/* Material & Care Instructions — built-in form only. A category with
+                  an attribute schema asks its own questions (a notebook has paper
+                  and binding, not fabric and washing instructions), so these are
+                  hidden there rather than shown with options that do not apply. */}
+              {!usesDynamicAttributes && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 
                 {/* Material — MANDATORY */}
@@ -2839,9 +2866,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                           </button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 py-1 scrollbar-none">
-                          {(selectedCategoryObj?.slug && MATERIAL_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
-                            ? MATERIAL_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
-                            : MATERIAL_OPTIONS
+                          {((selectedCategoryObj?.slug && MATERIAL_OPTIONS_BY_SLUG[selectedCategoryObj.slug]) || MATERIAL_OPTIONS
                           ).map((mat) => (
                             <button
                               key={mat}
@@ -2911,9 +2936,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                           </button>
                         </div>
                         <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 py-1 scrollbar-none">
-                          {(selectedCategoryObj?.slug && CARE_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
-                            ? CARE_OPTIONS_BY_SLUG[selectedCategoryObj.slug]
-                            : CARE_OPTIONS
+                          {((selectedCategoryObj?.slug && CARE_OPTIONS_BY_SLUG[selectedCategoryObj.slug]) || CARE_OPTIONS
                           ).map((c) => (
                             <button
                               key={c}
@@ -2938,6 +2961,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                 </div>
 
               </div>
+              )}
 
               {/* Progressive Disclosure: Apparel-only Optional Specifications.
                  Non-apparel verticals and DB-driven attribute schemas skip this

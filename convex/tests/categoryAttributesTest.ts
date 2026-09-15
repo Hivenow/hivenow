@@ -80,6 +80,7 @@ function fakeDb(rowsByCategoryId: Record<string, { fields: unknown[] } | undefin
 
 const PERFUME_CATEGORY = "cat_perfume";
 const SAREE_CATEGORY = "cat_saree";
+const NOTEBOOK_CATEGORY = "cat_notebook";
 
 const perfumeSchema = {
   fields: [
@@ -102,8 +103,20 @@ const perfumeSchema = {
   ],
 };
 
+// A schema that lists colour among its own fields, as a notebook set might.
+const notebookSchema = {
+  fields: [
+    { key: "pagesPerNotebook", label: "Pages per notebook", type: "number", required: true, unit: "pages" },
+    { key: "color", label: "Colour", type: "text", required: false },
+  ],
+};
+
 // A saree category has no row: it keeps running on the apparel vertical.
-const db = fakeDb({ [PERFUME_CATEGORY]: perfumeSchema, [SAREE_CATEGORY]: undefined });
+const db = fakeDb({
+  [PERFUME_CATEGORY]: perfumeSchema,
+  [NOTEBOOK_CATEGORY]: notebookSchema,
+  [SAREE_CATEGORY]: undefined,
+});
 
 async function run() {
   // ─── 1. No attribute set: the vertical path is unchanged ──────────────────
@@ -243,6 +256,47 @@ async function run() {
     "allowed keys come from the schema, not the vertical",
     [...(await getAllowedSpecKeysForCategory(db, PERFUME_CATEGORY as any, "fragrance"))].sort(),
     ["batchCode", "concentration", "notes", "volumeMl"]
+  );
+
+  // ─── 3. Colour is not exempt from the schema ──────────────────────────────
+  //
+  // The seller form used to send details.color for every product. On a schema
+  // category that does not list colour, that alone made every publish fail.
+  // The form now sends colour only through the schema's own fields; these pin
+  // the server rule the form relies on.
+
+  await checkRejects(
+    "a schema category without a colour field rejects details.color",
+    () =>
+      validateProductDetailsForCategory(
+        db,
+        PERFUME_CATEGORY as any,
+        { volumeMl: "50", concentration: "Eau de Toilette", color: "Amber" },
+        "fragrance"
+      ),
+    `"color" is not one of this category's attributes`
+  );
+
+  check(
+    "a schema category that lists colour accepts details.color",
+    await validateProductDetailsForCategory(
+      db,
+      NOTEBOOK_CATEGORY as any,
+      { pagesPerNotebook: "48", color: "Multicolour" },
+      "lifestyle"
+    ),
+    { pagesPerNotebook: "48", color: "Multicolour" }
+  );
+
+  check(
+    "a schema category's optional colour may be omitted",
+    await validateProductDetailsForCategory(
+      db,
+      NOTEBOOK_CATEGORY as any,
+      { pagesPerNotebook: "48" },
+      "lifestyle"
+    ),
+    { pagesPerNotebook: "48" }
   );
 
   console.log(`\nCategory attributes: ${passed} passed, ${failed} failed.`);

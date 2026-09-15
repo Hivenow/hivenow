@@ -17,6 +17,13 @@ export interface VariantEditorProps {
   onIncrementStock: (size: string) => void;
   onDecrementStock: (size: string) => void;
   isFreeSizeCategory?: boolean;
+  /**
+   * Whether the product is a garment. Free size is how every one-variant product
+   * is stored, but size language only means something for clothing; a notebook
+   * or a postcard just has a stock count. Defaults to true so any caller that
+   * does not pass it keeps the existing wording.
+   */
+  isApparel?: boolean;
   fitRecommendation: "runs_small" | "true_to_size" | "runs_large";
   onFitRecommendationChange: (fit: "runs_small" | "true_to_size" | "runs_large") => void;
   silhouette: string;
@@ -35,6 +42,7 @@ export function VariantEditor({
   onIncrementStock,
   onDecrementStock,
   isFreeSizeCategory,
+  isApparel = true,
   fitRecommendation,
   onFitRecommendationChange,
   silhouette,
@@ -83,10 +91,13 @@ export function VariantEditor({
           { value: "oversized", label: "Oversized", description: "Intentionally roomy streetwear fit" },
         ];
 
+  // The stored variant stays "Free Size" either way; only the wording changes.
+  const isStockOnly = isFreeSizeCategory && !isApparel;
+
   return (
     <div className="flex flex-col gap-6 select-text" style={{ touchAction: "pan-y" }}>
       {/* Free Size Notice */}
-      {isFreeSizeCategory ? (
+      {isStockOnly ? null : isFreeSizeCategory ? (
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
           <Info className="w-4 h-4 text-slate-600 shrink-0" />
           <p className="text-xs font-medium text-slate-700">
@@ -198,11 +209,13 @@ export function VariantEditor({
         <div className="flex flex-col gap-2 animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
             <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-              Quantity in Stock (Units) *
+              {isStockOnly ? "Stock Quantity (Units) *" : "Quantity in Stock (Units) *"}
             </label>
-            <span className="text-[10px] text-red-500 font-semibold">
-              Mandatory for each {axisLabel.toLowerCase()}
-            </span>
+            {!isStockOnly && (
+              <span className="text-[10px] text-red-500 font-semibold">
+                Mandatory for each {axisLabel.toLowerCase()}
+              </span>
+            )}
           </div>
 
           <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
@@ -218,7 +231,7 @@ export function VariantEditor({
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-900">{sz}</span>
+                    <span className="text-sm font-bold text-slate-900">{isStockOnly ? "In stock" : sz}</span>
                     {hasZero && (
                       <span className="text-[10px] text-red-500 font-medium">
                         (Please enter quantity)
