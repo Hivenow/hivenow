@@ -214,6 +214,11 @@ mergeGuestCart(items, resolution?)
   3. plan = planGuestMerge(accountLines, validGuestLines)
 
   Empty guest bag              -> { kind: "merged", noChange }        (client clears device bag)
+  Guest bag spans >1 boutique  -> write NOTHING, return
+                                  { kind: "invalid_guest_bag", reason: "mixed_boutiques",
+                                    boutiques, lines }                  (invalid state; never pick a boutique
+                                                                         implicitly, even with a resolution;
+                                                                         the shopper chooses which lines to keep)
   Account cart empty           -> insert guest lines
   Same boutique                -> combine: same (product,size) takes max(guest, account) quantity,
                                   capped at min(available, MAX_QTY_PER_LINE); keep the earlier priceAtAddPaise
@@ -230,6 +235,7 @@ mergeGuestCart(items, resolution?)
 ```
 
 - Returns `{ kind: "merged", cart: <getCart shape>, droppedGuestLines, displacedLines }`.
+- A mixed-boutique guest bag is invalid state (the one-boutique bag model never produces it). The server returns `invalid_guest_bag` with every guest line and its boutique, writes nothing, and does not choose a boutique. The client shows the shopper the lines by boutique, lets them keep one boutique's lines, fixes the device bag, and calls `mergeGuestCart` again.
 - The client clears the device bag **only** after a `merged` response. On `conflict` it shows the choice screen and calls again with `resolution`. If the app is killed in between, the device bag is still there and the flow repeats on next launch.
 - Displaced lines are returned, not silently deleted, so the client can offer "Move to Wishlist" (wishlist is device-local today).
 
