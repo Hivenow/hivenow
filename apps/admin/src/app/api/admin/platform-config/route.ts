@@ -6,11 +6,18 @@ import { api } from "../../../../../../../convex/_generated/api";
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 async function verifyAdmin() {
-  const { userId } = await auth();
+  const { userId, getToken } = await auth();
   if (!userId) return null;
 
   try {
-    const user = await convex.query(api.users.getUserByClerkId, { clerkId: userId });
+    // Ask Convex who the caller is using their own Clerk token, rather than looking a user up
+    // by an id we pass in. A per-request client keeps one admin's token from leaking into
+    // another request through the shared module-level client.
+    const token = await getToken({ template: "convex" });
+    if (!token) return null;
+    const authedConvex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    authedConvex.setAuth(token);
+    const user = await authedConvex.query(api.auth.getMe, {});
     if (user && user.role === "admin") {
       return user;
     }

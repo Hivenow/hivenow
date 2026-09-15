@@ -1,7 +1,7 @@
 // convex/users.ts
 // User sync and profile queries for the HIVE customer app.
 
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthenticatedUser, requireRole } from "./lib/auth";
 import { internal } from "./_generated/api";
@@ -1171,7 +1171,9 @@ export const updateProfilePhone = mutation({
   },
 });
 
-export const getUserByClerkId = query({
+// Internal: returns the full user document for any subject with no auth check, so it must not
+// be callable from clients. Authenticated callers should use auth.getMe for their own record.
+export const getUserByClerkId = internalQuery({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
