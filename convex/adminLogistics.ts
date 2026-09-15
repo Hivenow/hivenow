@@ -925,6 +925,23 @@ export const processLogisticsStatusUpdateInternal = internalMutation({
 
     await ctx.db.patch(shipment._id, patchData);
 
+    // Trigger ops Slack alert: Rider Assigned
+    if (args.status === "driver_assigned" && args.driverDetails) {
+      const superadmin = await ctx.db.query("users").withIndex("by_role", q => q.eq("role", "admin")).first();
+      if (superadmin && order) {
+        const adminId = superadmin._id;
+        const boutiqueDoc = order.boutiqueId ? await ctx.db.get(order.boutiqueId) : null;
+        await triggerNotification(ctx, adminId, "slack", "rider_assigned_ops", "order", order._id, JSON.stringify({
+          orderNumber: order.orderNumber,
+          boutiqueName: (boutiqueDoc as any)?.boutiqueName || (boutiqueDoc as any)?.name || order.boutiqueName || "Boutique",
+          driverName: args.driverDetails.name || "Assigned Courier Partner",
+          driverPhone: args.driverDetails.phone || "N/A",
+          vehiclePlate: args.driverDetails.vehiclePlate || "N/A",
+          liveTrackingUrl: args.driverDetails.liveTrackingUrl || args.driverDetails.trackingUrl || "",
+        }));
+      }
+    }
+
     // Trigger ops Slack alerts for exceptions
     if (args.status === "failed" || args.status === "rto_initiated") {
       const superadmin = await ctx.db.query("users").withIndex("by_role", q => q.eq("role", "admin")).first();

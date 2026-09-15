@@ -729,6 +729,42 @@ export const processPaymentFailed = internalMutation({
       await ctx.db.patch(session._id, { status: "expired" });
     }
 
+    // Ops Slack alert: Payment Failed (Drop-off Recovery)
+    const superadmin = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .first();
+
+    if (superadmin) {
+      const adminId = superadmin._id;
+      const targetUserId = session?.userId ?? payment.customerId;
+      const customer = targetUserId ? await ctx.db.get(targetUserId) : null;
+      const customerDoc = customer as any;
+      const customerName = customerDoc?.name || customerDoc?.displayName || customerDoc?.email || customerDoc?.phone || (session?.addressSnapshot as any)?.fullName || "Customer";
+      const customerPhone = customerDoc?.phone || (session?.addressSnapshot as any)?.phone || "N/A";
+      const customerEmail = customerDoc?.email || "N/A";
+      const boutiqueName = session?.items?.[0]?.boutiqueName || "Boutique";
+
+      await triggerNotification(
+        ctx,
+        adminId,
+        "slack",
+        "payment_failed_ops",
+        "payment",
+        payment._id,
+        JSON.stringify({
+          amount: payment.amount,
+          amountPaise: payment.amount,
+          customerName,
+          customerPhone,
+          customerEmail,
+          errorReason: args.errorReason,
+          boutiqueName,
+          itemsCount: session?.items?.length || 1,
+        })
+      );
+    }
+
     return { success: true };
   },
 });

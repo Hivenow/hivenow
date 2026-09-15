@@ -551,6 +551,29 @@ export const placeOrder = mutation({
 
         await ctx.db.patch(productRow._id, { stockBySize, active, updatedAt: now });
 
+        if (totalStock <= 0) {
+          const adminUser = await ctx.db
+            .query("users")
+            .withIndex("by_role", (q) => q.eq("role", "admin"))
+            .first();
+          if (adminUser) {
+            const adminId = (adminUser as any)._id as Id<"users">;
+            const boutiqueDoc = await ctx.db.get(boutiqueId);
+            await triggerNotification(
+              ctx,
+              adminId,
+              "slack",
+              "out_of_stock_alert",
+              "product",
+              productRow._id,
+              JSON.stringify({
+                productName: productRow.name,
+                boutiqueName: (boutiqueDoc as any)?.boutiqueName || (boutiqueDoc as any)?.name || "Boutique",
+              })
+            );
+          }
+        }
+
         await ctx.db.insert("inventoryMovements", {
           productId: productRow._id,
           boutiqueId: productRow.boutiqueId,

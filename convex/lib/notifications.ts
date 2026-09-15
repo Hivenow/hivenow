@@ -884,7 +884,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
     }
 
     case "out_of_stock_alert": {
-      const title = `⚠️ Product Stock Alert (Out of Stock)`;
+      const title = `⚠️ Product Sold Out (Out of Stock)`;
       const fallback = `${title}: ${payload.productName || "Product"} in ${payload.boutiqueName || "Boutique"}`;
       const blocks = [
         {
@@ -896,11 +896,102 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           fields: [
             { type: "mrkdwn", text: `*Product:*\n${payload.productName || "N/A"}` },
             { type: "mrkdwn", text: `*Boutique:*\n${payload.boutiqueName || "N/A"}` },
-            { type: "mrkdwn", text: `*Current Stock:*\n0 units` },
+            { type: "mrkdwn", text: `*Status:*\nAuto-deactivated (0 stock)` },
+          ],
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/products|Inspect Product on Admin Portal> • Request restock from boutique`,
+            },
           ],
         },
       ];
       return { text: fallback, blocks, channelCategory: "catalog" };
+    }
+
+    case "payment_failed_ops": {
+      const title = `🚨 Customer Checkout Payment Failed`;
+      const amountPaise = payload.amountPaise ?? (payload.amount != null ? Number(payload.amount) : 0);
+      const amountFormatted = amountPaise > 0 ? (amountPaise / 100).toFixed(2) : "0.00";
+      const fallback = `${title}: ₹${amountFormatted} by ${payload.customerName || "Customer"} (${payload.customerPhone || "N/A"}) - ${payload.errorReason || "Failed"}`;
+      const fields = [
+        { type: "mrkdwn", text: `*Customer:*\n${payload.customerName || "Customer"} (\`${payload.customerPhone || "N/A"}\`)` },
+        { type: "mrkdwn", text: `*Amount Attempted:*\n*₹${amountFormatted}*` },
+        { type: "mrkdwn", text: `*Boutique:*\n${payload.boutiqueName || "N/A"}` },
+        { type: "mrkdwn", text: `*Failure Reason:*\n${payload.errorReason || "Bank / Gateway error"}` },
+      ];
+      if (payload.customerEmail && payload.customerEmail !== "N/A") {
+        fields.push({ type: "mrkdwn", text: `*Email:*\n${payload.customerEmail}` });
+      }
+
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields,
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/orders|View Admin Portal> • *Action:* Reach out on WhatsApp to recover sale with alternate UPI QR`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "rider_assigned_ops": {
+      const title = `🛵 Hyperlocal Courier / Rider Assigned`;
+      const fallback = `${title}: Order #${payload.orderNumber || ""} - ${payload.driverName || "Driver"} (${payload.vehiclePlate || "Bike"})`;
+      const fields = [
+        { type: "mrkdwn", text: `*Order:*\n#${payload.orderNumber || "N/A"}` },
+        { type: "mrkdwn", text: `*Boutique:*\n${payload.boutiqueName || "Unknown"}` },
+        { type: "mrkdwn", text: `*Rider Name:*\n${payload.driverName || "Assigned Driver"}` },
+        { type: "mrkdwn", text: `*Rider Phone:*\n\`${payload.driverPhone || "N/A"}\`` },
+      ];
+      if (payload.vehiclePlate && payload.vehiclePlate !== "N/A") {
+        fields.push({ type: "mrkdwn", text: `*Vehicle Plate:*\n\`${payload.vehiclePlate}\`` });
+      }
+
+      const contextElements: any[] = [];
+      if (payload.liveTrackingUrl) {
+        contextElements.push({
+          type: "mrkdwn",
+          text: `📍 <${payload.liveTrackingUrl}|Live Rider Map Tracking>`,
+        });
+      }
+      contextElements.push({
+        type: "mrkdwn",
+        text: `🔗 <${adminBaseUrl}/admin/orders|View Order on Admin Portal>`,
+      });
+
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields,
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: contextElements,
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
     }
 
     default: {
