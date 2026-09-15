@@ -14,7 +14,7 @@ import { useSessionStore } from "@/context/SessionContext";
 import { useRouter } from "next/navigation";
 import { navigateToSignIn } from "@/lib/auth-redirect";
 
-import { calculateDisplayPricing } from "@/lib/pricing";
+import { calculateCardPricing } from "@/lib/pricing";
 import { getBoutiqueStatus } from "../../../../../convex/shared/boutiqueStatus";
 
 export interface ProductCardProps {
@@ -143,7 +143,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
     }
   };
 
-  const pricing = calculateDisplayPricing(product);
+  // Card data is already in rupees (mapDbProduct / getCatalogPage / wishlist). Converting it as a
+  // stored product would divide it by 100 a second time.
+  const pricing = calculateCardPricing(product);
   const displayPrice = pricing.price;
   const compareAtPrice = pricing.compareAtPrice;
   const discountPercent = pricing.discountPercent;

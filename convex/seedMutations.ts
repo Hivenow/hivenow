@@ -5,6 +5,7 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { resolveVerticalTypeForCategory } from "./lib/verticals";
+import { calculateAllInclusivePricePaise, getPlatformConfig } from "./pricingService";
 
 /**
  * Whether mock-data seeding may run in this environment.
@@ -147,6 +148,10 @@ export const insertMockData = mutation({
     };
 
     let globalIndex = 0;
+    // Product price fields are paise, written the same way createProduct writes them: the seller's
+    // base price in `basePrice`, the all-inclusive storefront price in `price`. The rupee figures
+    // below are only used to pick realistic amounts and to sort products into collections.
+    const platformConfig = await getPlatformConfig(ctx);
     for (const b of boutiquesData) {
       const bId = boutiqueIds[b.boutiqueName]!;
       for (let i = 0; i < b.productCount; i++) {
@@ -166,6 +171,9 @@ export const insertMockData = mutation({
           price = 699 + (globalIndex * 13) % 2500;
         }
 
+        const basePricePaise = price * 100;
+        const baseDiscountPricePaise = globalIndex % 3 === 0 ? Math.round(price * 0.9) * 100 : undefined;
+
         const outOfStock = (globalIndex % 5 === 0); // 20% out of stock
         const isFresh = globalIndex % 4 === 0;
 
@@ -179,8 +187,12 @@ export const insertMockData = mutation({
           description: `A beautiful ${name.toLowerCase()} from ${b.boutiqueName}.`,
           categoryId: seedCategoryId,
           verticalType: seedVerticalType,
-          price,
-          discountPrice: globalIndex % 3 === 0 ? Math.round(price * 0.9) : undefined,
+          basePrice: basePricePaise,
+          price: calculateAllInclusivePricePaise(basePricePaise, "bronze", platformConfig),
+          baseDiscountPrice: baseDiscountPricePaise,
+          discountPrice: baseDiscountPricePaise
+            ? calculateAllInclusivePricePaise(baseDiscountPricePaise, "bronze", platformConfig)
+            : undefined,
           images: ["https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&fit=crop&w=800&q=80"],
           sizes: ["S", "M", "L"],
           stockBySize: { "S": outOfStock ? 0 : 5, "M": outOfStock ? 0 : 5, "L": outOfStock ? 0 : 5 },

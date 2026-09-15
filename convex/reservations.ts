@@ -58,6 +58,14 @@ export const getProductReservationHold = query({
   },
 });
 
+/**
+ * `reservations.priceAtReserve` is stored in paise (like product prices). Every reader returns
+ * rupees through this helper, rounded to whole rupees as the storefront displays them.
+ */
+function reservationPriceRupees(priceAtReservePaise: number): number {
+  return Math.round(priceAtReservePaise / 100);
+}
+
 // ─── Customer: Create a Reservation ──────────────────────────────────────────
 export const createReservation = mutation({
   args: {
@@ -208,9 +216,9 @@ export const createReservation = mutation({
       }
     }
 
-    // 8. Normalize price to Rupees (DB products store prices in Paise e.g. 137900)
-    const rawProductPrice = (product as any).discountPrice ?? (product as any).price ?? 0;
-    const priceInRupees = rawProductPrice > 10000 ? Math.round(rawProductPrice / 100) : rawProductPrice;
+    // 8. Snapshot the price in paise, the same unit products are stored in. Readers convert to
+    //    rupees explicitly (reservationPriceRupees); the unit is never inferred from the value.
+    const priceAtReservePaise = (product as any).discountPrice ?? (product as any).price ?? 0;
 
     // 9. Create the reservation record
     const reservationExpiresAt = now + RESERVATION_TIMER_MS;
@@ -222,7 +230,7 @@ export const createReservation = mutation({
       productImageUrl,
       size: args.size,
       quantity: args.quantity,
-      priceAtReserve: priceInRupees,
+      priceAtReserve: priceAtReservePaise,
       status: "reservation_active",
       reservationExpiresAt,
       scheduledConfirmDate: nextOperatingDay,
@@ -693,7 +701,7 @@ export const getMyReservations = query({
 
     return reservations.map(r => ({
       ...r,
-      priceAtReserve: r.priceAtReserve > 10000 ? Math.round(r.priceAtReserve / 100) : r.priceAtReserve,
+      priceAtReserve: reservationPriceRupees(r.priceAtReserve),
     }));
   },
 });
@@ -725,7 +733,7 @@ export const getMyActiveReservations = query({
       .filter(r => activeStatuses.includes(r.status))
       .map(r => ({
         ...r,
-        priceAtReserve: r.priceAtReserve > 10000 ? Math.round(r.priceAtReserve / 100) : r.priceAtReserve,
+        priceAtReserve: reservationPriceRupees(r.priceAtReserve),
       }));
   },
 });
@@ -754,7 +762,7 @@ export const getReservationById = query({
 
     return {
       ...reservation,
-      priceAtReserve: reservation.priceAtReserve > 10000 ? Math.round(reservation.priceAtReserve / 100) : reservation.priceAtReserve,
+      priceAtReserve: reservationPriceRupees(reservation.priceAtReserve),
     };
   },
 });
@@ -779,16 +787,16 @@ export const getBoutiqueReservations = query({
 
     return reservations.map((r, i) => {
       const product = productFetches[i];
-      const rawCustomerPrice = r.priceAtReserve > 10000 ? Math.round(r.priceAtReserve / 100) : r.priceAtReserve;
+      const rawCustomerPrice = reservationPriceRupees(r.priceAtReserve);
 
+      // Product price fields are paise.
       let baseInRupees = rawCustomerPrice;
       if (product) {
         const rawBase = product.baseDiscountPrice ?? product.basePrice;
         if (rawBase != null && rawBase > 0) {
-          baseInRupees = rawBase > 10000 ? Math.round(rawBase / 100) : rawBase;
+          baseInRupees = Math.round(rawBase / 100);
         } else if (product.price != null && product.price > 0) {
-          const prodPriceRupees = product.price > 10000 ? Math.round(product.price / 100) : product.price;
-          baseInRupees = Math.round(prodPriceRupees / 1.18);
+          baseInRupees = Math.round(product.price / 100 / 1.18);
         }
       }
 
@@ -864,7 +872,7 @@ export const getAllReservations_admin = query({
 
     return reservations.map((r) => ({
       ...r,
-      priceAtReserve: r.priceAtReserve > 10000 ? Math.round(r.priceAtReserve / 100) : r.priceAtReserve,
+      priceAtReserve: reservationPriceRupees(r.priceAtReserve),
       customerName: customerMap[r.customerId] || "Unknown Customer",
       boutiqueName: r.boutiqueName || boutiqueMap[r.boutiqueId] || "Unknown Boutique",
     }));

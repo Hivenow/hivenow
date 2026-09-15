@@ -974,7 +974,9 @@ export async function verifyPaymentAndPlaceOrderInternal(
   const sellerTierKey = boutique?.pricingTier || "bronze";
   const pricing = calculateCheckoutPricing(
     session.items.map(item => ({
-      sellerBasePricePaise: item.sellerBasePricePaise ?? (item.price > 10000 ? item.price : Math.round(item.price * 100)),
+      // Session item prices are rupees (createCheckoutSession contract); only sessions created
+      // before sellerBasePricePaise existed reach this fallback.
+      sellerBasePricePaise: item.sellerBasePricePaise ?? Math.round(item.price * 100),
       quantity: item.quantity,
     })),
     session.deliveryFee ?? 0,

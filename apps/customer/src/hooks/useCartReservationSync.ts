@@ -93,13 +93,11 @@ export function useCartReservationSync() {
         console.log(
           `[useCartReservationSync] Adding accepted reservation ${res.productName} to bag`
         );
-        const normalizedPrice =
-          res.priceAtReserve > 10000 ? Math.round(res.priceAtReserve / 100) : res.priceAtReserve;
-
         addItem({
           productId: res.productId,
           size: res.size,
-          price: normalizedPrice,
+          // Already rupees: reservations.getMyReservations converts the stored paise.
+          price: res.priceAtReserve,
           name: res.productName,
           imageUrl: res.productImageUrl || "",
           boutiqueName: res.boutiqueName || "Boutique",

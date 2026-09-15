@@ -54,16 +54,17 @@ export interface CatalogCard {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pricing — mirrors apps/customer/src/lib/pricing.ts calculateDisplayPricing.
-// Kept byte-for-byte equivalent in behaviour so a server-ordered "Price: Low to
-// High" matches the price printed on the card.
+// Kept equivalent in behaviour so a server-ordered "Price: Low to High" matches
+// the price printed on the card.
+//
+// Input is a product as stored: price fields are PAISE, always. The unit is never
+// inferred from a value's size (the old "above 10000 means paise" rule showed any
+// product at or below ₹100 at 100× its price). Output is rupees.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PAISE_THRESHOLD = 10000;
-
-function toRupees(value: number | undefined | null, isRupees?: boolean): number | undefined {
+function paiseToRupees(value: number | undefined | null): number | undefined {
   if (value === undefined || value === null) return undefined;
-  if (value > PAISE_THRESHOLD && !isRupees) return value / 100;
-  return value;
+  return value / 100;
 }
 
 export function displayPricing(p: any): {
@@ -73,10 +74,9 @@ export function displayPricing(p: any): {
 } {
   if (!p) return { price: 0, discountPercent: 0 };
 
-  const isRupees = p._isRupees;
-  const rawPrice = toRupees(p.price || 0, isRupees) ?? 0;
-  const rawDiscountPrice = toRupees(p.discountPrice, isRupees);
-  const rawCompareAtPrice = toRupees(p.compareAtPrice ?? p.mrp, isRupees);
+  const rawPrice = paiseToRupees(p.price || 0) ?? 0;
+  const rawDiscountPrice = paiseToRupees(p.discountPrice);
+  const rawCompareAtPrice = paiseToRupees(p.compareAtPrice ?? p.mrp);
 
   const hasExplicitSellerDiscount =
     rawDiscountPrice !== undefined &&

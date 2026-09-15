@@ -1,4 +1,5 @@
 import { ResolvedBlock, ResolvedProduct } from "./types";
+import { displayPricing } from "../../shared/catalog";
 import { CollectionService } from "../merchandising/CollectionService";
 import { getPublicUrl } from "../../media/api";
 
@@ -130,27 +131,13 @@ const CURATED_BLOCK_TYPES = new Set(["collection", "premiumCuration"]);
 
 const DEFAULT_PRICE_CEILING_RUPEES = 999;
 
-// A "Under ₹X" rail has to match what the shopper actually sees on the card, not what's in the
-// column — those disagree today. Product price fields are written as paise by pricingService
-// (`calculateAllInclusivePricePaise`), but the storefront's calculateDisplayPricing only divides
-// by 100 when the value exceeds 10000, so a row stored as 2688 renders as "₹2,688" rather than
-// "₹26.88". The two helpers below mirror that storefront logic exactly, so a ceiling of 999 always
-// means "priced under ₹999 as displayed" regardless of which convention a given row follows.
-// Keep in sync with apps/customer/src/lib/pricing.ts.
-const DISPLAY_PAISE_THRESHOLD = 10000;
+// A "Under ₹X" rail has to match what the shopper actually sees on the card. Product price
+// fields are stored in paise, so this reuses the same shared conversion the catalog grid and the
+// storefront card use (convex/shared/catalog.ts displayPricing) rather than keeping its own copy.
 
-function toDisplayRupees(value: number | undefined | null): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  return value > DISPLAY_PAISE_THRESHOLD ? value / 100 : value;
-}
-
-/** The price the storefront will actually print on this product's card. */
+/** The price the storefront will actually print on this product's card, in rupees. */
 function displaySellingPrice(product: any): number {
-  const price = toDisplayRupees(product?.price) ?? 0;
-  const discount = toDisplayRupees(product?.discountPrice);
-  // Matches calculateDisplayPricing: a discount only counts when it undercuts the base price.
-  const hasSellerDiscount = discount !== undefined && discount > 0 && discount < price;
-  return Math.round(hasSellerDiscount ? discount : price);
+  return displayPricing(product).price;
 }
 
 export class BlockService {

@@ -1048,7 +1048,7 @@ export default defineSchema({
     productImageUrl:      v.string(),
     size:                 v.string(),
     quantity:             v.number(),               // always 1 for MVP
-    priceAtReserve:       v.number(),               // rupees, snapshot at reservation time (from product.price)
+    priceAtReserve:       v.number(),               // PAISE, snapshot at reservation time (product.discountPrice ?? product.price); readers return rupees
     status:               v.union(
                             v.literal("reservation_active"),
                             v.literal("awaiting_store_confirmation"),

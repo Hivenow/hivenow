@@ -52,14 +52,21 @@ assertEqual(pricingDiscounted.price, 4500, "Selling price should reflect discoun
 assertEqual(pricingDiscounted.price >= 3000 && pricingDiscounted.price <= 6000, true, "₹4,500 discounted item MUST match '₹3,000 – ₹6,000'");
 assertEqual(pricingDiscounted.price >= minPrice6k, false, "₹4,500 discounted item must NOT match 'Above ₹6,000' even if base price was ₹7,000");
 
-// Test 7: Legacy product stored in rupees (<= 10000)
-const legacyRupeesProduct = {
-  _id: "prod_4",
-  name: "Handloom Cotton Kurti",
-  price: 1800,
-};
-const pricingLegacy = displayPricing(legacyRupeesProduct);
-assertEqual(pricingLegacy.price, 1800, "Legacy price stored in rupees should remain 1800");
-assertEqual(pricingLegacy.price >= 1500 && pricingLegacy.price <= 3000, true, "Legacy ₹1,800 item MUST match '₹1,500 – ₹3,000'");
+// Test 7: Stored values are always paise — the unit is never inferred from the number's size.
+// Previously any value at or below 10000 was treated as rupees, so a ₹99 product (9900 paise)
+// sorted and filtered as ₹9,900.
+const boundaries: Array<[number, number]> = [
+  [9900, 99],       // ₹99
+  [10000, 100],     // ₹100
+  [99900, 999],     // ₹999
+  [1000000, 10000], // ₹10,000
+  [1250000, 12500], // ₹12,500
+];
+for (const [paise, rupees] of boundaries) {
+  assertEqual(displayPricing({ price: paise }).price, rupees, `${paise} paise must display as ₹${rupees}`);
+}
+assertEqual(displayPricing({ price: 9900 }).price <= 999, true, "A ₹99 product MUST match an 'Under ₹999' rail");
+assertEqual(displayPricing({ price: 99900 }).price <= 999, true, "A ₹999 product MUST match an 'Under ₹999' rail");
+assertEqual(displayPricing({ price: 100000 }).price <= 999, false, "A ₹1,000 product must NOT match an 'Under ₹999' rail");
 
 console.log("[PASS] All 7 Price Filtering & Normalization unit tests passed successfully!");

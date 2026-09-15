@@ -163,7 +163,8 @@ export default function AdminReservationsPage() {
                       {res.size} × {res.quantity}
                     </td>
                     <td className="px-5 py-4 font-bold whitespace-nowrap">
-                      {formatRupees(res.priceAtReserve > 10000 ? Math.round(res.priceAtReserve / 100) : res.priceAtReserve)}
+                      {/* Rupees: getAllReservations_admin converts the stored paise. */}
+                      {formatRupees(res.priceAtReserve)}
                     </td>
                     <td className="px-5 py-4">
                       <ReservationStatusBadge status={res.status} />

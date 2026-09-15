@@ -15,7 +15,7 @@ import { useSessionStore } from "@/context/SessionContext";
 import { checkServiceability } from "../../../../../convex/lib/serviceability";
 import { inrToPaise, toast } from "@hive/utils";
 import { mapDbProduct } from "@/lib/mapDbProduct";
-import { calculateDisplayPricing } from "@/lib/pricing";
+import { calculateCardPricing } from "@/lib/pricing";
 import { getBoutiqueStatus } from "../../../../../convex/shared/boutiqueStatus";
 import {
   ShieldCheck,
@@ -530,7 +530,8 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
             </div>
 
             {(() => {
-              const pricing = calculateDisplayPricing(displayProduct);
+              // displayProduct is mapped card data in rupees; don't convert it again.
+              const pricing = calculateCardPricing(displayProduct);
               return (
                 <div className="flex flex-wrap items-baseline gap-2.5 mb-6 leading-none select-none">
                   <span className="text-xl md:text-2xl font-black text-stone-900 tracking-tight">
