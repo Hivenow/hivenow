@@ -67,3 +67,47 @@ export const sendNotification = internalAction({
         }
     },
 });
+
+/**
+ * Direct channel message helper for scheduled cron jobs and ops digests.
+ * Does not require a notificationEvents row.
+ */
+export const sendSlackChannelMessage = internalAction({
+    args: {
+        channel: v.union(v.literal("orders"), v.literal("catalog")),
+        text: v.string(),
+        blocks: v.optional(v.any()),
+    },
+    handler: async (_ctx, args) => {
+        try {
+            let webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            if (args.channel === "orders") {
+                webhookUrl = process.env.SLACK_WEBHOOK_ORDERS_URL || process.env.SLACK_WEBHOOK_URL;
+            } else if (args.channel === "catalog") {
+                webhookUrl = process.env.SLACK_WEBHOOK_CATALOG_URL || process.env.SLACK_WEBHOOK_URL;
+            }
+
+            if (!webhookUrl) {
+                console.warn(`[sendSlackChannelMessage] Webhook URL not configured for ${args.channel}`);
+                return;
+            }
+
+            const bodyPayload: any = { text: args.text };
+            if (args.blocks && Array.isArray(args.blocks) && args.blocks.length > 0) {
+                bodyPayload.blocks = args.blocks;
+            }
+
+            const response = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(bodyPayload),
+            });
+
+            if (!response.ok) {
+                console.error(`[sendSlackChannelMessage] Failed: ${response.status}`, await response.text());
+            }
+        } catch (err) {
+            console.error("[sendSlackChannelMessage] Error sending channel message:", err);
+        }
+    },
+});
