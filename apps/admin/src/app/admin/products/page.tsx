@@ -25,7 +25,8 @@ import {
   Activity,
   CheckCircle2,
   XCircle,
-  Info
+  Info,
+  Trash2
 } from "lucide-react";
 
 const MODERATION_CATEGORIES = [
@@ -102,6 +103,7 @@ export default function AdminProductsPage() {
   const toggleProductHidden = useMutation(api.adminProducts.toggleProductHiddenAdmin);
   const approveProduct = useMutation(api.adminProducts.approveProductAdmin);
   const requestChangesProduct = useMutation(api.adminProducts.requestChangesProductAdmin);
+  const deleteProductAdmin = useMutation(api.adminProducts.deleteProductAdmin);
 
   const handleApproveProduct = async (productId: string) => {
     if (!confirm("Are you sure you want to approve this product listing to go live?")) return;
@@ -130,7 +132,7 @@ export default function AdminProductsPage() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalAction, setModalAction] = useState<"deactivate" | "reactivate" | "hide" | "unhide" | null>(null);
+  const [modalAction, setModalAction] = useState<"deactivate" | "reactivate" | "hide" | "unhide" | "delete" | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [reason, setReason] = useState("");
   const [moderationCategory, setModerationCategory] = useState("COPYRIGHT");
@@ -145,7 +147,7 @@ export default function AdminProductsPage() {
     historyProduct ? { productId: historyProduct._id } : "skip"
   );
 
-  const openActionModal = (product: any, action: "deactivate" | "reactivate" | "hide" | "unhide") => {
+  const openActionModal = (product: any, action: "deactivate" | "reactivate" | "hide" | "unhide" | "delete") => {
     setSelectedProduct(product);
     setModalAction(action);
     setReason("");
@@ -191,6 +193,12 @@ export default function AdminProductsPage() {
           reason,
         });
         alert("Product moderation has been lifted.");
+      } else if (modalAction === "delete") {
+        await deleteProductAdmin({
+          productId: selectedProduct._id,
+          reason,
+        });
+        alert("Product and associated R2 media have been permanently deleted.");
       }
       setIsModalOpen(false);
     } catch (err: any) {
@@ -671,6 +679,17 @@ export default function AdminProductsPage() {
                               <EyeOff className="w-3 h-3" /> Moderate
                             </Button>
                           )}
+
+                          {/* Hard Delete Button */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openActionModal(prod, "delete")}
+                            className="px-2.5 py-1 text-[10px] font-bold text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100 rounded-lg flex items-center gap-1 font-sans cursor-pointer"
+                            title="Permanently delete product and Cloudflare R2 media"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -785,11 +804,22 @@ export default function AdminProductsPage() {
           modalAction === "deactivate" ? "Deactivate Product" :
           modalAction === "reactivate" ? "Reactivate Product" :
           modalAction === "hide" ? "Moderate Product Listing" :
-          modalAction === "unhide" ? "Lift Product Moderation" : "Administrative Action"
+          modalAction === "unhide" ? "Lift Product Moderation" :
+          modalAction === "delete" ? "Permanently Delete Product" : "Administrative Action"
         }
       >
         <form onSubmit={handleModalSubmit} className="flex flex-col gap-4 font-sans text-left mt-2">
           {/* Action Warnings */}
+          {modalAction === "delete" && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-start gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+              <div>
+                <p className="font-bold text-red-900">Irreversible Action: Permanent Hard Delete</p>
+                <p className="text-[11px] text-red-700 mt-0.5">This will completely remove the product from the database AND trigger background deletion of all associated images from Cloudflare R2 storage. This cannot be undone.</p>
+              </div>
+            </div>
+          )}
+
           {modalAction === "deactivate" && (
             <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-xl flex items-start gap-2 font-medium">
               <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
@@ -885,12 +915,12 @@ export default function AdminProductsPage() {
               disabled={submitting}
               className={cn(
                 "px-4 py-2 text-xs font-bold rounded-xl text-white font-sans border-transparent uppercase tracking-wider",
-                (modalAction === "deactivate" || modalAction === "hide") ? "bg-red-700 hover:bg-red-800" : "bg-hive-dark hover:bg-hive-dark/95"
+                (modalAction === "deactivate" || modalAction === "hide" || modalAction === "delete") ? "bg-red-700 hover:bg-red-800" : "bg-hive-dark hover:bg-hive-dark/95"
               )}
             >
               {submitting ? (
-                <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Saving...</span>
-              ) : "Confirm Action"}
+                <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> {modalAction === "delete" ? "Deleting..." : "Saving..."}</span>
+              ) : (modalAction === "delete" ? "Permanently Delete" : "Confirm Action")}
             </Button>
           </div>
         </form>

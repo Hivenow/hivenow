@@ -7,6 +7,7 @@ import { requireRole } from "./lib/auth";
 import { validateUploadedFile } from "./lib/uploads";
 import { ImageAsset } from "./schema";
 import { getPublicUrl } from "./media/api";
+import { internal } from "./_generated/api";
 
 /**
  * Helper to resolve R2 ImageAsset URLs into fully-qualified public HTTP strings.
@@ -242,8 +243,39 @@ export const deleteBanner = mutation({
     id: v.id("banners"),
   },
   handler: async (ctx, args) => {
-    await requireRole(ctx, "admin");
+    const admin = await requireRole(ctx, "admin");
+    const banner = await ctx.db.get(args.id);
+    if (!banner) {
+      throw new Error("Banner not found.");
+    }
+
+    const objectKeys: string[] = [];
+
+    // Helper to check image target
+    const processImage = async (field: any) => {
+      if (!field) return;
+      if (typeof field === "object" && field.objectKey) {
+        objectKeys.push(field.objectKey);
+      } else if (typeof field === "string" && !field.startsWith("http")) {
+        try {
+          await ctx.storage.delete(field as any);
+        } catch (e) {
+          console.error("[deleteBanner] Legacy storage delete failed:", field, e);
+        }
+      }
+    };
+
+    await processImage(banner.desktopImageUrl);
+    await processImage(banner.mobileImageUrl);
+
+    if (objectKeys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
+        objectKeys,
+        actorId: admin._id,
+      });
+    }
+
     await ctx.db.delete(args.id);
-    return args.id;
+    return { id: args.id, objectKeys };
   },
 });

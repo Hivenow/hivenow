@@ -10,6 +10,7 @@ import { Id } from "./_generated/dataModel";
 import { validateUploadedFile } from "./lib/uploads";
 import { resolveBoutiqueStatus } from "./lib/boutiqueStatus";
 import { getBoutiqueStatus } from "./shared/boutiqueStatus";
+import { extractR2ObjectKeys } from "./media/api";
 import {
   toCatalogCard,
   applyCatalogFilters,
@@ -954,8 +955,17 @@ export const deleteProduct = mutation({
       throw new Error("Unauthorized: Product does not belong to your boutique.");
     }
 
-    // Clean up all images from storage if they are not shared by other products
-    for (const imgId of product.images) {
+    // Extract R2 objectKeys and schedule background cleanup
+    const objectKeys = extractR2ObjectKeys(product.images || []);
+    if (objectKeys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
+        objectKeys,
+        actorId: boutique._id,
+      });
+    }
+
+    // Clean up all legacy images from storage if they are not shared by other products
+    for (const imgId of product.images || []) {
       if (imgId && typeof imgId === "string" && !imgId.startsWith("http")) {
         const shared = await isImageShared(ctx, boutique._id, product._id, imgId as string);
         if (!shared) {
@@ -970,7 +980,7 @@ export const deleteProduct = mutation({
 
     await ctx.db.delete(args.id);
     await updateBoutiqueProductCount(ctx, boutique._id);
-    return args.id;
+    return { id: args.id, objectKeys };
   },
 });
 

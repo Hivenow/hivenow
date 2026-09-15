@@ -1504,6 +1504,50 @@ export const updateBoutiqueOrderStatus = mutation({
           }
         }
       }
+
+      // Ops Slack alert: Order Accepted by Boutique
+      if (args.status === "confirmed") {
+        const superadmin = await ctx.db.query("users").withIndex("by_role", q => q.eq("role", "admin")).first();
+        if (superadmin) {
+          const customerUser = await ctx.db.get(order.customerId);
+          await triggerNotification(
+            ctx,
+            superadmin._id,
+            "slack",
+            "order_accepted",
+            "order",
+            args.orderId,
+            JSON.stringify({
+              orderNumber: order.orderNumber,
+              boutiqueName: boutique.boutiqueName || boutique.name || "Boutique",
+              totalPaise: order.total,
+              customerName: (customerUser as any)?.name || order.deliveryAddress?.phone || "Customer",
+            })
+          );
+        }
+      }
+
+      // Ops Slack alert: Order Shipped / Out for Delivery
+      if (args.status === "out_for_delivery") {
+        const superadmin = await ctx.db.query("users").withIndex("by_role", q => q.eq("role", "admin")).first();
+        if (superadmin) {
+          const customerUser = await ctx.db.get(order.customerId);
+          await triggerNotification(
+            ctx,
+            superadmin._id,
+            "slack",
+            "order_shipped",
+            "order",
+            args.orderId,
+            JSON.stringify({
+              orderNumber: order.orderNumber,
+              boutiqueName: boutique.boutiqueName || boutique.name || "Boutique",
+              customerName: (customerUser as any)?.name || order.deliveryAddress?.phone || "Customer",
+              deliveryCity: order.deliveryAddress?.city || "Kochi",
+            })
+          );
+        }
+      }
     }
 
     if (args.status === "cancelled") {
@@ -1554,7 +1598,7 @@ export const updateBoutiqueOrderStatus = mutation({
       }
 
       // 3. Slack alert — includes internal reason for ops
-      const slackWebhook = process.env.SLACK_WEBHOOK_URL;
+      const slackWebhook = process.env.SLACK_WEBHOOK_ORDERS_URL || process.env.SLACK_WEBHOOK_URL;
       if (slackWebhook) {
         await ctx.scheduler.runAfter(0, internal.whatsapp.sendSlackAlert, {
           webhook: slackWebhook,
@@ -2289,7 +2333,7 @@ export const checkOrderAcceptanceSLA = internalAction({
     // If already accepted/cancelled, do nothing
     if (order.status !== "pending_confirmation") return;
 
-    const slackWebhook = process.env.SLACK_WEBHOOK_URL;
+    const slackWebhook = process.env.SLACK_WEBHOOK_ORDERS_URL || process.env.SLACK_WEBHOOK_URL;
     const boutique = order.boutiqueName || "Unknown Boutique";
     const customerPhone = order.deliveryAddress?.phone || "Unknown";
     const minutesElapsed = Math.round((Date.now() - order.createdAt) / 60000);

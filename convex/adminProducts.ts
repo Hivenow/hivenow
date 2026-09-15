@@ -2,11 +2,12 @@
 // Admin-only product moderation query and mutation APIs.
 
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./lib/auth";
 import { updateBoutiqueProductCount } from "./boutiques";
-import { getPublicUrl } from "./media/api";
+import { getPublicUrl, extractR2ObjectKeys } from "./media/api";
 import { getAllowedSpecKeys, validateAndCleanProductDetails, validateProductDetailsForCategory } from "./lib/verticals";
 import { getPlatformSettings, calculateProductPricing } from "./pricingService";
 import { triggerNotification } from "./lib/notifications";
@@ -818,5 +819,74 @@ export const updateProductDetailsAdmin = mutation({
     await updateBoutiqueProductCount(ctx, product.boutiqueId);
 
     return args.id;
+  },
+});
+
+// ─── ADMIN HARD DELETE ──────────────────────────────────────────────────────
+
+/**
+ * Admin-only mutation that permanently deletes a product.
+ *
+ * R2 objects are cleaned by a scheduled internal action, which only runs if this
+ * mutation commits. Object keys come from the product record, never from the client.
+ *
+ * Legacy Convex storage IDs are cleaned inline via ctx.storage.delete().
+ */
+export const deleteProductAdmin = mutation({
+  args: {
+    productId: v.id("products"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireRole(ctx, "admin");
+    const product = await ctx.db.get(args.productId);
+    if (!product) {
+      throw new Error("Product not found.");
+    }
+
+    // Extract R2 objectKeys from ImageAsset entries
+    const objectKeys = extractR2ObjectKeys(product.images || []);
+
+    // Clean legacy Convex storage IDs (strings that aren't URLs or ImageAssets)
+    for (const img of product.images || []) {
+      if (img && typeof img === "string" && !img.startsWith("http")) {
+        try {
+          await ctx.storage.delete(img as any);
+        } catch (e) {
+          console.error("[deleteProductAdmin] Legacy storage delete failed:", img, e);
+        }
+      }
+    }
+
+    // Schedule R2 object cleanup
+    if (objectKeys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
+        objectKeys,
+        actorId: admin._id,
+      });
+    }
+
+    // Hard delete the product document
+    await ctx.db.delete(args.productId);
+    await updateBoutiqueProductCount(ctx, product.boutiqueId);
+
+    // Audit log
+    const boutique = await ctx.db.get(product.boutiqueId);
+    await ctx.db.insert("auditLogs", {
+      actorRole: "admin",
+      actorId: admin._id,
+      action: "products.admin_hard_delete",
+      entityType: "products",
+      entityId: args.productId,
+      metadata: JSON.stringify({
+        productName: product.name,
+        boutiqueName: (boutique as any)?.boutiqueName || (boutique as any)?.name || "Unknown",
+        reason: args.reason,
+        r2ObjectKeys: objectKeys,
+      }),
+      createdAt: Date.now(),
+    });
+
+    return { productId: args.productId, objectKeys };
   },
 });

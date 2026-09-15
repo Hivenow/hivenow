@@ -346,13 +346,14 @@ export async function triggerNotification(
         sentAt: Date.now(),
       });
     } else if (channel === "slack") {
-      const { text, blocks } = formatSlackNotification(template, payload);
+      const { text, blocks, channelCategory } = formatSlackNotification(template, payload);
 
       // Slack uses fetch(), so dispatch it from an action after this mutation commits.
       await ctx.scheduler.runAfter(0, internal.slack.sendNotification, {
         eventId,
         text,
         blocks,
+        channel: channelCategory,
       });
     } else if (channel === "whatsapp") {
       let phone = payload.phone || user.phone;
@@ -399,7 +400,7 @@ export async function triggerNotification(
   return eventId;
 }
 
-export function formatSlackNotification(template: string, rawPayload: any): { text: string; blocks?: any[] } {
+export function formatSlackNotification(template: string, rawPayload: any): { text: string; blocks?: any[]; channelCategory?: "orders" | "catalog" } {
   let payload: any = rawPayload;
   if (typeof rawPayload === "string") {
     try {
@@ -450,7 +451,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     case "admin_product_approved": {
@@ -469,7 +470,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     case "admin_product_rejected": {
@@ -489,7 +490,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     case "boutique_application_submitted": {
@@ -520,7 +521,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     case "boutique_kyc_submitted":
@@ -550,7 +551,124 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
+    }
+
+    case "new_order_ops": {
+      const title = `🛍️ New Order Arrived!`;
+      const amountPaise = payload.totalPaise ?? payload.total ?? 0;
+      const amountFormatted = amountPaise > 0 ? (amountPaise / 100).toFixed(2) : "0.00";
+      const fallback = `${title}: Order #${payload.orderNumber || ""} from ${payload.boutiqueName || "Boutique"} - ₹${amountFormatted}`;
+      const fields = [
+        { type: "mrkdwn", text: `*Order Number:*\n#${payload.orderNumber || "N/A"}` },
+        { type: "mrkdwn", text: `*Store / Boutique:*\n${payload.boutiqueName || "Unknown"}` },
+        { type: "mrkdwn", text: `*Order Value:*\n*₹${amountFormatted}*` },
+        { type: "mrkdwn", text: `*Items:*\n${payload.itemsCount ?? payload.itemCount ?? 1} item(s)` },
+      ];
+      if (payload.customerPhone) {
+        fields.push({ type: "mrkdwn", text: `*Customer:*\n${payload.customerPhone}` });
+      }
+      if (payload.deliveryCity) {
+        fields.push({ type: "mrkdwn", text: `*City:*\n${payload.deliveryCity}` });
+      }
+
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields,
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/orders|Manage Order on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "order_accepted": {
+      const title = `✅ Order Accepted by Boutique`;
+      const amountPaise = payload.totalPaise ?? payload.total ?? 0;
+      const amountFormatted = amountPaise > 0 ? ` - ₹${(amountPaise / 100).toFixed(2)}` : "";
+      const fallback = `${title}: Order #${payload.orderNumber || ""}${amountFormatted} (${payload.boutiqueName || "Boutique"})`;
+      const fields = [
+        { type: "mrkdwn", text: `*Order Number:*\n#${payload.orderNumber || "N/A"}` },
+        { type: "mrkdwn", text: `*Boutique:*\n${payload.boutiqueName || "Unknown"}` },
+      ];
+      if (payload.customerName) {
+        fields.push({ type: "mrkdwn", text: `*Customer:*\n${payload.customerName}` });
+      }
+      if (amountPaise > 0) {
+        fields.push({ type: "mrkdwn", text: `*Total:*\n₹${(amountPaise / 100).toFixed(2)}` });
+      }
+
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields,
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/orders|View on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "order_shipped": {
+      const title = `🚚 Order Out for Delivery / Shipped`;
+      const fallback = `${title}: Order #${payload.orderNumber || ""} (${payload.boutiqueName || "Boutique"})`;
+      const fields = [
+        { type: "mrkdwn", text: `*Order Number:*\n#${payload.orderNumber || "N/A"}` },
+        { type: "mrkdwn", text: `*Boutique:*\n${payload.boutiqueName || "Unknown"}` },
+      ];
+      if (payload.customerName) {
+        fields.push({ type: "mrkdwn", text: `*Customer:*\n${payload.customerName}` });
+      }
+      if (payload.deliveryCity) {
+        fields.push({ type: "mrkdwn", text: `*Destination:*\n${payload.deliveryCity}` });
+      }
+
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields,
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/orders|Track on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
     }
 
     case "order_confirmed": {
@@ -581,7 +699,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "orders" };
     }
 
     case "high_value_order": {
@@ -612,7 +730,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "orders" };
     }
 
     case "return_claim_requested":
@@ -643,7 +761,97 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "claim_submitted_ops": {
+      const title = `⚠️ Return/Exchange Claim Submitted`;
+      const fallback = `${title}: Claim #${payload.claimNumber || ""} for Order #${payload.orderNumber || ""}`;
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*Claim #:*\n#${payload.claimNumber || "N/A"}` },
+            { type: "mrkdwn", text: `*Order #:*\n#${payload.orderNumber || "N/A"}` },
+            { type: "mrkdwn", text: `*Type:*\n${payload.type || "return"}` },
+          ],
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/claims|Review Claim on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "shipment_failed": {
+      const title = `❌ Shipment Dispatch Failed`;
+      const fallback = `${title}: AWB ${payload.awbNumber || "N/A"} - ${payload.remarks || payload.exceptionType || "Dispatch failed"}`;
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*AWB:*\n${payload.awbNumber || "N/A"}` },
+            { type: "mrkdwn", text: `*Exception:*\n${payload.exceptionType || "N/A"}` },
+            { type: "mrkdwn", text: `*Remarks:*\n${payload.remarks || "No details provided"}` },
+          ],
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/logistics|Inspect Shipment on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
+    }
+
+    case "shipment_rto_initiated": {
+      const title = `↩️ Shipment RTO Initiated`;
+      const fallback = `${title}: AWB ${payload.awbNumber || "N/A"} returning to origin`;
+      const blocks = [
+        {
+          type: "header",
+          text: { type: "plain_text", text: title, emoji: true },
+        },
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: `*AWB:*\n${payload.awbNumber || "N/A"}` },
+            { type: "mrkdwn", text: `*Reason:*\n${payload.exceptionType || "Customer unreachable / refused"}` },
+            { type: "mrkdwn", text: `*Remarks:*\n${payload.remarks || "Return initiated"}` },
+          ],
+        },
+        { type: "divider" },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `🔗 <${adminBaseUrl}/admin/logistics|Inspect RTO on Admin Portal>`,
+            },
+          ],
+        },
+      ];
+      return { text: fallback, blocks, channelCategory: "orders" };
     }
 
     case "payout_requested": {
@@ -672,7 +880,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     case "out_of_stock_alert": {
@@ -692,7 +900,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
           ],
         },
       ];
-      return { text: fallback, blocks };
+      return { text: fallback, blocks, channelCategory: "catalog" };
     }
 
     default: {

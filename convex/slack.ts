@@ -24,12 +24,19 @@ export const sendNotification = internalAction({
         eventId: v.id("notificationEvents"),
         text: v.string(),
         blocks: v.optional(v.any()),
+        channel: v.optional(v.union(v.literal("orders"), v.literal("catalog"))),
     },
     handler: async (ctx, args) => {
         try {
-            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            let webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            if (args.channel === "orders") {
+                webhookUrl = process.env.SLACK_WEBHOOK_ORDERS_URL || process.env.SLACK_WEBHOOK_URL;
+            } else if (args.channel === "catalog") {
+                webhookUrl = process.env.SLACK_WEBHOOK_CATALOG_URL || process.env.SLACK_WEBHOOK_URL;
+            }
+
             if (!webhookUrl) {
-                console.warn("[sendSlackNotification] Slack webhook URL not configured");
+                console.warn(`[sendSlackNotification] Slack webhook URL not configured for channel ${args.channel || "default"}`);
             } else {
                 const bodyPayload: any = { text: args.text };
                 if (args.blocks && Array.isArray(args.blocks) && args.blocks.length > 0) {
