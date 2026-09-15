@@ -1,4 +1,4 @@
-import { action, mutation, internalMutation, internalQuery } from "../_generated/server";
+import { action, internalAction, mutation, internalMutation, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 import { PutObjectCommand, HeadObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -299,3 +299,54 @@ function verifyMagicBytes(bytes: Uint8Array, mime: string): boolean {
   
   return false;
 }
+
+// ─── R2 Object Deletion ─────────────────────────────────────────────────────
+
+/**
+ * Extracts R2 objectKeys from a mixed array of strings and ImageAsset objects.
+ * Skips plain URLs (http/https) and legacy Convex storage IDs.
+ */
+export function extractR2ObjectKeys(images: any[]): string[] {
+  const keys: string[] = [];
+  for (const img of images) {
+    if (img && typeof img === "object" && img.objectKey) {
+      keys.push(img.objectKey);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Delete one or more objects from Cloudflare R2.
+ *
+ * Internal only. It takes arbitrary object keys and does no ownership check, and keys are
+ * readable from public cdn.hivenow.in URLs — as a public action any signed-in account could
+ * wipe the bucket. Callers must authorize first and derive the keys server-side from records
+ * they are allowed to delete, then schedule this (see adminProducts.deleteProductAdmin).
+ * Silently skips objects that don't exist (R2 returns 204 for missing keys).
+ */
+export const deleteR2Objects = internalAction({
+  args: {
+    objectKeys: v.array(v.string()),
+    actorId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.objectKeys.length === 0) return { deleted: 0 };
+
+    const client = getR2Client();
+    const bucket = (process.env.R2_BUCKET_NAME || "hive-media").trim();
+    let deleted = 0;
+
+    for (const key of args.objectKeys) {
+      try {
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+        deleted++;
+        mediaLogger.info("Deleted R2 object", { objectKey: key, userId: args.actorId });
+      } catch (err: any) {
+        mediaLogger.error("Failed to delete R2 object", err, { objectKey: key });
+      }
+    }
+
+    return { deleted };
+  },
+});
