@@ -1391,3 +1391,111 @@ export const addNotebooksCategory = internalMutation({
     };
   },
 });
+
+/**
+ * Adds Post Cards under Accessories, for the same stationery partner as
+ * Notebooks.
+ *
+ * Same placement and vertical as addNotebooksCategory, for the same reasons: no
+ * top-level Stationery parent for a handful of listings, and lifestyle's
+ * defaults (free size, no garment fields) already fit a pack of cards. The slug
+ * matches no sizing rule in packages/types/src/verticals.ts, so sizing resolves
+ * to lifestyle's free size without a code change.
+ *
+ * Idempotent. If `post-cards` already exists under Accessories it is reported
+ * and left untouched, so re-running is a no-op. A `post-cards` slug anywhere
+ * else aborts rather than guessing which one was meant.
+ *
+ * Touches the `categories` table only. No product is read, moved or
+ * re-categorised, and no existing category is modified.
+ *
+ *   npx convex run --prod migrations:addPostCardsCategory
+ *   npx convex run --prod migrations:addPostCardsCategory '{"apply":true}'
+ *
+ * Reversal: deactivate the created category from the admin categories screen.
+ */
+export const addPostCardsCategory = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const apply = args.apply === true;
+
+    const SPEC = {
+      name:       "Post Cards",
+      slug:       "post-cards",
+      parentSlug: "accessories",
+      vertical:   "lifestyle" as const,
+    };
+
+    const parent = await ctx.db
+      .query("categories")
+      .withIndex("by_slug", (q) => q.eq("slug", SPEC.parentSlug))
+      .first();
+    if (!parent) throw new Error(`Aborted: no parent category with slug "${SPEC.parentSlug}".`);
+    if (!parent.active) {
+      throw new Error(`Aborted: parent "${parent.name}" (/${parent.slug}) is inactive.`);
+    }
+    if (parent.parentId) {
+      throw new Error(`Aborted: "${parent.name}" is itself a subcategory; nesting is two levels deep.`);
+    }
+
+    const existing = await ctx.db
+      .query("categories")
+      .withIndex("by_slug", (q) => q.eq("slug", SPEC.slug))
+      .collect();
+    if (existing.length > 1) {
+      throw new Error(`Aborted: ${existing.length} categories already use the slug "${SPEC.slug}".`);
+    }
+    const clash = existing[0];
+    if (clash) {
+      if (clash.parentId !== parent._id) {
+        throw new Error(
+          `Aborted: slug "${SPEC.slug}" already belongs to "${clash.name}", which is not under ${parent.name}.`
+        );
+      }
+      return {
+        applied: false,
+        status: "already_exists",
+        id: clash._id,
+        parentId: parent._id,
+        active: clash.active,
+        verticalType: clash.verticalType ?? null,
+        categoriesCreated: 0,
+        productChanges: 0,
+        note: `"${clash.name}" (/${clash.slug}) already exists under ${parent.name}. Nothing to do.`,
+      };
+    }
+
+    const all = await ctx.db.query("categories").collect();
+    const sortOrder = all.reduce((max, c) => Math.max(max, c.sortOrder || 0), 0) + 1;
+
+    const willCreate = {
+      name:           SPEC.name,
+      slug:           SPEC.slug,
+      active:         true,
+      sortOrder,
+      // Off the homepage, like every other subcategory: the homepage block
+      // filters on showOnHomepage with no level filter, so a child set true
+      // renders beside the parents as though it were one.
+      showOnHomepage: false,
+      parentId:       parent._id,
+      verticalType:   SPEC.vertical,
+    };
+
+    const id = apply
+      ? await ctx.db.insert("categories", { ...willCreate, createdAt: Date.now() })
+      : null;
+
+    return {
+      applied: apply,
+      status: apply ? "created" : "dry_run",
+      id,
+      parent: { id: parent._id, name: parent.name, slug: parent.slug },
+      willCreate,
+      categoriesCreated: apply ? 1 : 0,
+      productChanges: 0,
+      note: apply
+        ? "Category created. No product was read, moved or re-categorised."
+        : "Dry run. Re-run with \"apply\":true to write.",
+    };
+  },
+});
