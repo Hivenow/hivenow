@@ -34,10 +34,21 @@ function getLocalCraftDetails(text: string): string {
     : "";
 }
 
-function generateDynamicFallback(roughText: string, style: string): string {
+function generateDynamicFallback(roughText: string, style: string, verticalType: string): string {
   const raw = roughText.trim();
   const capitalized = raw.charAt(0).toUpperCase() + raw.slice(1);
   const lowercase = raw.toLowerCase();
+
+  // The style templates below describe fit, drape and fabric on the skin, which
+  // is nonsense for a notebook, a perfume or a watch. Anything that is not a
+  // garment gets a neutral line that claims nothing about the product.
+  if (verticalType !== "apparel") {
+    const neutral = [
+      `${capitalized}. Thoughtfully made and easy to use, it makes a lovely pick for yourself or a thoughtful gift.`,
+      `${capitalized}. A well-made choice for everyday use, and a simple, thoughtful gift.`,
+    ];
+    return neutral[Math.floor(Math.random() * neutral.length)]!;
+  }
 
   const templates: Record<string, string[]> = {
     elegant: [
@@ -91,7 +102,7 @@ function createFallbackStream(text: string): ReadableStream {
 
 export async function POST(req: NextRequest) {
   try {
-    const { roughText, type, style = "casual", verticalType = "apparel" } = await req.json();
+    const { roughText, type, style = "casual", verticalType = "apparel", categoryName } = await req.json();
 
     if (!roughText || !roughText.trim()) {
       return NextResponse.json({ error: "Rough text input is required" }, { status: 400 });
@@ -110,10 +121,28 @@ export async function POST(req: NextRequest) {
       fragrance: "You are a product copywriter for a boutique fragrance brand. Rewrite the notes into a clear, evocative description focusing on scent profile, notes, and occasion wear.",
       handbag: "You are a product copywriter for a designer handbag boutique. Rewrite the notes into a clean description focusing on silhouette, capacity, styling, and leather/fabric quality.",
       apparel: "You are a product copywriter for a clothing store. Rewrite the user's rough notes into a clear, simple, and natural product description.",
+      jewellery: "You are a product copywriter for a jewellery store. Rewrite the notes into a clear description focusing on the design, metal or finish, stones, and the occasions it suits.",
+      footwear: "You are a product copywriter for a footwear store. Rewrite the notes into a clear description focusing on the style, material, comfort, and where it is best worn.",
+      lifestyle: "You are a product copywriter for a lifestyle, home and stationery store. Rewrite the notes into a clear description focusing on what the product is, what is included, its size and materials, and how it is used or gifted.",
     };
     const rolePrompt = roleMap[verticalType] || roleMap.apparel!;
 
-    const systemPrompt = `${rolePrompt}
+    // The category narrows the vertical: "lifestyle" covers both notebooks and
+    // bedsheets. It is admin-defined, but it still goes into a prompt, so it is
+    // flattened to one short line.
+    const safeCategory =
+      typeof categoryName === "string"
+        ? categoryName.replace(/[\r\n"`]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60)
+        : "";
+    const categoryLine = safeCategory ? `\n    Product category: ${safeCategory}.` : "";
+
+    // What "keep the details accurate" means depends on what is being sold.
+    const accuracyDetails =
+      verticalType === "apparel"
+        ? "color, fabric, comfort, pattern"
+        : "quantities, sizes, materials, colours, and specifications";
+
+    const systemPrompt = `${rolePrompt}${categoryLine}
     
     STYLE DIRECTION:
     ${styleInstruction}
@@ -122,7 +151,7 @@ export async function POST(req: NextRequest) {
     - Write in simple, warm, everyday English.
     - Keep the language clean and friendly.
     - NEVER use AI buzzwords or dramatic cliché phrases such as "exquisite", "lustrous", "timeless elegance", "meticulously crafted", "effortlessly", "sophisticated", "draped in", "testament to", "rich crimson", or "uniquely textured".
-    - Keep all original details (color, fabric, comfort, pattern) 100% accurate. Do not invent extra features.
+    - Keep all original details (${accuracyDetails}) 100% accurate. Do not invent extra features.
     - Write a maximum of 180 characters in one complete, natural paragraph (1 to 2 concise sentences).
     - Focus ONLY on the product itself. Do not mention any store, boutique, merchant, or delivery service.
 
@@ -188,7 +217,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Fallback stream if API keys fail
     console.log("[Hive AI Stream Fallback 🔄] Streaming dynamic rule template...");
-    const fallbackText = generateDynamicFallback(roughText, style);
+    const fallbackText = generateDynamicFallback(roughText, style, verticalType);
     return new Response(createFallbackStream(fallbackText), {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

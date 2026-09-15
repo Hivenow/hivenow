@@ -1474,7 +1474,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
   // AI Stream Reader implementation
   const handleGenerateAI = async () => {
     const currentName = getValues("name");
-    const currentCategory = selectedCategoryObj?.name || "garment";
+    const currentCategory = selectedCategoryObj?.name || "product";
 
     if (!currentName) {
       toast.error("Product Name Required", "Please enter a product name first in Step 2 to guide the AI writer.");
@@ -1499,6 +1499,8 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
           type: "description",
           style: "standard",
           verticalType: currentVerticalConfig.id,
+          // Narrows the vertical for the writer: lifestyle spans notebooks and bedsheets.
+          categoryName: selectedCategoryObj?.name,
         }),
       });
 
