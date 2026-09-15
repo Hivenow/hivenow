@@ -10,6 +10,58 @@ import { calculateProductPricing, DEFAULT_TIER_SLABS, getPlatformConfig, calcula
 
 
 /**
+ * One-time: convert reservation prices that were saved in rupees to paise.
+ *
+ * `reservations.priceAtReserve` is paise. Until 2026-09 createReservation guessed the unit from
+ * the product price's size, so prod holds both: 20 rows in paise and 4 (created from 2026-08-12
+ * 07:20 UTC) in whole rupees. The threshold below is used once, against that known data, and is
+ * safe because no product has ever been live below ₹399 (39900 paise) — a paise snapshot can't be
+ * at or below 10000. Converted rupee values were already rounded, so they become whole-rupee paise.
+ *
+ * Dry run by default; pass { dryRun: false } to write. Idempotent: converted rows exceed the
+ * threshold and are skipped on a rerun.
+ *
+ *   npx convex run migrations:convertReservationRupeePricesToPaise '{}' --prod
+ *   npx convex run migrations:convertReservationRupeePricesToPaise '{"dryRun": false}' --prod
+ */
+export const convertReservationRupeePricesToPaise = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun !== false;
+    const RUPEE_VALUE_CEILING = 10000;
+
+    const reservations = await ctx.db.query("reservations").collect();
+    const changes: Array<{
+      reservationId: Id<"reservations">;
+      createdAt: string;
+      status: string;
+      from: number;
+      to: number;
+      currentProductPricePaise: number | null;
+    }> = [];
+
+    for (const r of reservations) {
+      if (r.priceAtReserve > RUPEE_VALUE_CEILING) continue;
+      const product = await ctx.db.get(r.productId);
+      const to = Math.round(r.priceAtReserve * 100);
+      changes.push({
+        reservationId: r._id,
+        createdAt: new Date(r.createdAt).toISOString(),
+        status: r.status,
+        from: r.priceAtReserve,
+        to,
+        currentProductPricePaise: (product as any)?.discountPrice ?? (product as any)?.price ?? null,
+      });
+      if (!dryRun) {
+        await ctx.db.patch(r._id, { priceAtReserve: to, updatedAt: Date.now() });
+      }
+    }
+
+    return { dryRun, scanned: reservations.length, toConvert: changes.length, changes };
+  },
+});
+
+/**
  * Migration to backfill the productPerformance table for all historical orders and claims.
  * Keeps convex queries strictly read-only and aggregates all stats safely in O(1) fields.
  */
