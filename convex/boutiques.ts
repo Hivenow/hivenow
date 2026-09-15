@@ -886,8 +886,29 @@ export const getApprovedBoutiques = query({
           // Use pre-computed count instead of querying all products per boutique (N+1 elimination)
           const activeApprovedProductCount = b.activeApprovedProductCount ?? 0;
 
+          // Unauthenticated query: pick public fields explicitly. Spreading the document here
+          // published owner/staff contact details and bank account fields to anyone holding the
+          // Convex URL. Callers need identity, display, coordinates and radius — nothing else.
+          // addressDetails is narrowed to lat/lng, the only part callers read (coordinate fallback).
           return {
-            ...b,
+            _id: b._id,
+            _creationTime: b._creationTime,
+            slug: b.slug,
+            boutiqueName: b.boutiqueName,
+            name: b.name,
+            city: b.city,
+            storeCategory: b.storeCategory,
+            status: b.status,
+            isAcceptingOrders: b.isAcceptingOrders,
+            latitude: b.latitude,
+            longitude: b.longitude,
+            addressDetails: b.addressDetails
+              ? { lat: b.addressDetails.lat, lng: b.addressDetails.lng }
+              : undefined,
+            deliveryRadiusKm: b.deliveryRadiusKm,
+            averageRating: b.averageRating,
+            reviewCount: b.reviewCount,
+            updatedAt: b.updatedAt,
             logoUrl,
             bannerUrl,
             merchantTier,
