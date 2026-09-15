@@ -42,6 +42,7 @@ jobs:
           - apps/boutique
           - apps/customer
           - apps/admin
+          - apps/mobile
     steps:
       - uses: actions/checkout@v4
 

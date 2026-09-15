@@ -1,22 +1,18 @@
 {
   "expo": {
-    "name": "Hive Mobile",
-    "slug": "hive-mobile",
+    "name": "Hive",
+    "slug": "hivenow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "hive-mobile",
+    "scheme": "hivenow",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F5C22B"
-    },
     "ios": {
+      "bundleIdentifier": "in.hivenow.customer",
       "supportsTablet": true
     },
     "android": {
+      "package": "in.hivenow.customer",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F5C22B"
@@ -28,7 +24,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F5C22B"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
