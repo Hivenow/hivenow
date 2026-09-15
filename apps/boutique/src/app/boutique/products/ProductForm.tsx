@@ -1902,7 +1902,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
             <div
               className="w-full relative bg-slate-950 overflow-hidden flex items-center justify-center rounded-xl shadow-inner select-none"
               style={{
-                height: "400px",
+                height: "500px",
                 maxWidth: "400px"
               }}
             >
@@ -1912,7 +1912,7 @@ export default function ProductForm({ productToEdit, productToTemplate, categori
                     image={activePreview.url}
                     crop={{ x: cropSettings.x || 0, y: cropSettings.y || 0 }}
                     zoom={cropSettings.zoom || 1}
-                    aspect={1}
+                    aspect={4 / 5}
                     onCropChange={(crop) => updateActiveCrop({ x: crop.x, y: crop.y })}
                     onZoomChange={(zoom) => updateActiveCrop({ zoom })}
                     onCropComplete={(croppedArea, croppedAreaPixels) => updateActiveCrop({ croppedAreaPixels })}
