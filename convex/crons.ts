@@ -108,6 +108,12 @@ crons.interval(
   internal.orders.sweepUnacceptedOrdersSLA
 );
 
-
+// Daily 9:00 PM IST (15:30 UTC) Operations Digest posted to #orders
+crons.daily(
+  "daily_ops_digest_9pm_ist",
+  { hourUTC: 15, minuteUTC: 30 },
+  internal.opsDigest.sendDailyOpsDigest,
+  {}
+);
 
 export default crons;
