@@ -411,7 +411,7 @@ export function formatSlackNotification(template: string, rawPayload: any): { te
   }
   payload = payload || {};
 
-  const adminBaseUrl = process.env.ADMIN_URL || "https://admin.hivenow.in";
+  const adminBaseUrl = process.env.ADMIN_URL || "https://beelynadmin.hivenow.in";
 
   switch (template) {
     case "product_pending_approval":
