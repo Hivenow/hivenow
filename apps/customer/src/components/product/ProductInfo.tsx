@@ -11,6 +11,7 @@ import { ProductDetail } from "@/lib/mockProductDetails";
 import { SizeSelector } from "./SizeSelector";
 import { PurchaseActions } from "./PurchaseActions";
 import { ProductSpecifications } from "./ProductSpecifications";
+import { resolveSpecRows } from "@/lib/productSpecs";
 import { ProductPhotoDisclaimer } from "./ProductPhotoDisclaimer";
 import { useRouter } from "next/navigation";
 import { cleanProductTitle } from "./ProductCard";
@@ -89,7 +90,15 @@ export const ProductInfo: React.FC<ProductInfoProps> = ({
 
   const hasDescription = product.description && product.description.trim() !== "";
   const productDetails = product.details || {};
-  const hasDetails = verticalConfig.specKeys.some((key) => Boolean(productDetails[key]?.trim()));
+  // Same rows ProductSpecifications renders, so a notebook with specs but no
+  // description still gets its Product Details section.
+  const hasDetails =
+    resolveSpecRows(
+      productDetails,
+      verticalConfig.specKeys,
+      verticalConfig.specLabels,
+      product.attributeFields
+    ).length > 0;
 
   // Prepare spec list items dynamically using tailoring-focused icons (Fabric, Craft, Fit Notes)
   const specItems = [

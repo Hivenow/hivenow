@@ -1116,13 +1116,35 @@ export const getProduct = query({
     const purchasable = isPurchasableProduct(product, boutique);
 
     const enriched = await enrichProduct(ctx, product);
+
+    // The category's attribute schema decides which of product.details a shopper
+    // sees, under what label and unit. Only the presentation half is sent: options,
+    // required flags and help text belong to the seller form. Categories without a
+    // schema get no field at all, and the product page falls back to the
+    // vertical's spec keys exactly as before.
+    const attributeSet = await ctx.db
+      .query("attributeSets")
+      .withIndex("by_categoryId", (q) => q.eq("categoryId", product.categoryId))
+      .first();
+    const withSchema =
+      attributeSet && attributeSet.fields.length > 0
+        ? {
+            ...enriched,
+            attributeFields: attributeSet.fields.map((f) => ({
+              key: f.key,
+              label: f.label,
+              unit: f.unit,
+            })),
+          }
+        : enriched;
+
     if (!purchasable) {
       return {
-        ...enriched,
+        ...withSchema,
         isUnavailable: true,
       };
     }
-    return enriched;
+    return withSchema;
   },
 });
 

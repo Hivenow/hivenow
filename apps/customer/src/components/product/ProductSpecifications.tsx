@@ -4,6 +4,7 @@ import React from "react";
 import { VerticalConfig } from "@hive/types";
 import { ProductDetail } from "@/lib/mockProductDetails";
 import { cn } from "@hive/ui";
+import { resolveSpecRows } from "@/lib/productSpecs";
 
 export interface ProductSpecificationsProps {
   product: ProductDetail;
@@ -16,17 +17,14 @@ export function ProductSpecifications({
   config,
   className,
 }: ProductSpecificationsProps) {
-  const details = product.details || {};
-
-  // Generic projection: derive visible fields strictly from config.specKeys + config.specLabels + product.details
-  const renderedSpecs = config.specKeys
-    .map((key) => {
-      const label = config.specLabels[key] || key;
-      const val = details[key];
-      const value = typeof val === "string" ? val.trim() : "";
-      return { key, label, value };
-    })
-    .filter((item): item is typeof item & { value: string } => Boolean(item.value));
+  // The category's attribute schema when it has one, else the vertical's spec
+  // keys. See lib/productSpecs.ts.
+  const renderedSpecs = resolveSpecRows(
+    product.details,
+    config.specKeys,
+    config.specLabels,
+    product.attributeFields
+  );
 
   if (renderedSpecs.length === 0) return null;
 

@@ -78,6 +78,12 @@ export interface ProductDetail {
   verticalType?: VerticalType;
   photoSource?: "in_store" | "ai_enhanced";
   details?: Record<string, string>;
+  /**
+   * The presentation half of the category's admin-defined attribute schema,
+   * attached by getProduct. Absent when the category has no schema, in which
+   * case the vertical's built-in spec keys decide what is shown.
+   */
+  attributeFields?: { key: string; label: string; unit?: string }[];
   inventory: Record<string, number>; // size to stock count
   featuredReviews: ProductReview[];
 }
