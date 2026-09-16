@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/api";
 import { Button } from "@hive/ui";
@@ -15,9 +15,11 @@ import {
   Check, 
   AlertTriangle, 
   Loader2,
-  ListRestart
+  ListRestart,
+  Crop
 } from "lucide-react";
 import { getVerticalConfig } from "@hive/types";
+import { ImageCropModal } from "./ImageCropModal";
 
 interface ProductInspectionDrawerProps {
   product: any;
@@ -91,15 +93,48 @@ export function ProductInspectionDrawer({
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
 
+  // Image crop modal state
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageUrl, setCropImageUrl] = useState("");
+  const [cropImageIndex, setCropImageIndex] = useState(0);
+  const [cropRefreshKey, setCropRefreshKey] = useState(0);
+
+  const openCropModal = useCallback((url: string, index: number) => {
+    setCropImageUrl(url);
+    setCropImageIndex(index);
+    setCropModalOpen(true);
+  }, []);
+
+  // Images state (supports instant update on crop)
+  const [images, setImages] = useState<string[]>(() => {
+    return (product?.imageUrls && product.imageUrls.length > 0)
+      ? product.imageUrls
+      : (product?.images || []);
+  });
+
+  useEffect(() => {
+    const list = (product?.imageUrls && product.imageUrls.length > 0)
+      ? product.imageUrls
+      : (product?.images || []);
+    setImages(list);
+  }, [product]);
+
+  const handleCropComplete = useCallback((newUrl?: string, index?: number) => {
+    setCropModalOpen(false);
+    if (newUrl && typeof index === "number") {
+      setImages(prev => {
+        const next = [...prev];
+        next[index] = newUrl;
+        return next;
+      });
+    }
+    setCropRefreshKey(k => k + 1);
+  }, []);
+
   // Mutations
   const updateProductDetails = useMutation(api.adminProducts.updateProductDetailsAdmin);
   const approveProduct = useMutation(api.adminProducts.approveProductAdmin);
   const requestChangesProduct = useMutation(api.adminProducts.requestChangesProductAdmin);
-
-  // Clean image URLs helper
-  const images = useMemo(() => {
-    return product?.images || [];
-  }, [product]);
 
   const activeImage = images[0] || "";
 
@@ -433,10 +468,20 @@ export function ProductInspectionDrawer({
                     
                     {/* Left Column: Image Gallery */}
                     <div className="col-span-7 flex flex-col gap-4">
-                      <div className="aspect-[3/4] w-full rounded-2xl overflow-hidden bg-[#FAF8F5] border border-stone-100 relative">
+                      <div className="aspect-[3/4] w-full rounded-2xl overflow-hidden bg-[#FAF8F5] border border-stone-100 relative group/hero">
                         {activeImage ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={activeImage} alt="" className="w-full h-full object-cover" />
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={activeImage} alt="" className="w-full h-full object-cover" />
+                            {/* Crop button overlay */}
+                            <button
+                              onClick={() => openCropModal(activeImage, 0)}
+                              className="absolute top-3 right-3 p-2 rounded-xl bg-white/85 backdrop-blur-md border border-white/40 text-stone-700 hover:bg-white hover:text-amber-700 shadow-lg transition-all opacity-0 group-hover/hero:opacity-100 z-10 cursor-pointer"
+                              title="Crop this image"
+                            >
+                              <Crop className="w-4 h-4" />
+                            </button>
+                          </>
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center text-stone-400 gap-2">
                             <span className="text-3xl">📷</span>
@@ -448,9 +493,17 @@ export function ProductInspectionDrawer({
                       {images.length > 1 && (
                         <div className="grid grid-cols-4 gap-2">
                           {images.map((img: string, idx: number) => (
-                            <div key={idx} className="aspect-[3/4] rounded-lg overflow-hidden border border-stone-200/60 bg-stone-50">
+                            <div key={idx} className="aspect-[3/4] rounded-lg overflow-hidden border border-stone-200/60 bg-stone-50 relative group/thumb">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={img} alt="" className="w-full h-full object-cover" />
+                              {/* Crop button on thumbnail */}
+                              <button
+                                onClick={() => openCropModal(img, idx)}
+                                className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-white/85 backdrop-blur-md border border-white/30 text-stone-600 hover:bg-white hover:text-amber-700 shadow transition-all opacity-0 group-hover/thumb:opacity-100 z-10 cursor-pointer"
+                                title={`Crop image ${idx + 1}`}
+                              >
+                                <Crop className="w-3 h-3" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -1082,6 +1135,17 @@ export function ProductInspectionDrawer({
           to { transform: translateX(0); }
         }
       `}</style>
+
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        onClose={() => setCropModalOpen(false)}
+        imageUrl={cropImageUrl}
+        imageIndex={cropImageIndex}
+        productId={product?._id || ""}
+        productName={product?.name || ""}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }

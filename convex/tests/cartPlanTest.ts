@@ -191,19 +191,29 @@ export function runCartPlanTests() {
   });
   check("resolution is ignored when boutiques match (still merges)", sameWithResolution.kind === "merged" ? sameWithResolution.lines.length : -1, 2);
 
-  // Mixed-boutique guest bag is invalid state: never pick a boutique implicitly.
-  const mixedLines = [
-    line({ productId: "old", boutiqueId: "b_fort", addedAt: 100 }),
-    line({ productId: "new", boutiqueId: "b_kochi", addedAt: 900 }),
-  ];
-  const mixedIntoEmpty = planGuestMerge({ accountLines: [], guestLines: mixedLines });
-  check("mixed guest bag (empty account) is invalid, not merged", mixedIntoEmpty.kind, "invalid_guest_bag");
-  if (mixedIntoEmpty.kind === "invalid_guest_bag") {
-    check("mixed guest bag reports reason and both boutiques", [mixedIntoEmpty.reason, mixedIntoEmpty.guestBoutiqueIds], ["mixed_boutiques", ["b_fort", "b_kochi"]]);
-    check("mixed guest bag returns every guest line, none dropped", [mixedIntoEmpty.guestLines.map((l) => l.productId), mixedIntoEmpty.droppedGuestLines.length], [["old", "new"], 0]);
+  // A guest bag must hold one boutique. A mixed bag is invalid state, surfaced explicitly — never
+  // silently reduced to one boutique.
+  const mixedGuest = planGuestMerge({
+    accountLines: [],
+    guestLines: [
+      line({ productId: "old", boutiqueId: "b_fort", addedAt: 100 }),
+      line({ productId: "new", boutiqueId: "b_kochi", addedAt: 900 }),
+    ],
+  });
+  check("mixed guest bag is invalid, not silently merged", mixedGuest.kind, "invalid_guest_bag");
+  if (mixedGuest.kind === "invalid_guest_bag") {
+    check("mixed guest bag reports both boutiques", mixedGuest.guestBoutiqueIds.sort(), ["b_fort", "b_kochi"]);
+    check("mixed guest bag keeps all lines for repair", mixedGuest.guestLines.map((l) => l.productId).sort(), ["new", "old"]);
   }
-  check("mixed guest bag (account on one of its boutiques) is still invalid", planGuestMerge({ accountLines: account, guestLines: mixedLines }).kind, "invalid_guest_bag");
-  check("mixed guest bag is invalid even with a resolution", planGuestMerge({ accountLines: account, guestLines: mixedLines, resolution: "keep_guest" }).kind, "invalid_guest_bag");
+  const mixedGuestWithAccount = planGuestMerge({
+    accountLines: account,
+    guestLines: [
+      line({ productId: "old", boutiqueId: "b_fort", addedAt: 100 }),
+      line({ productId: "new", boutiqueId: "b_kochi", addedAt: 900 }),
+    ],
+    resolution: "keep_guest",
+  });
+  check("mixed guest bag is invalid even with an account and a resolution", mixedGuestWithAccount.kind, "invalid_guest_bag");
 
   const badQuantity = planGuestMerge({ accountLines: account, guestLines: [line({ productId: "x", quantity: 0 })] });
   check("guest line with zero quantity is dropped", badQuantity.kind === "no_change" ? badQuantity.droppedGuestLines.map((d) => d.reason) : badQuantity.kind, ["invalid_quantity"]);

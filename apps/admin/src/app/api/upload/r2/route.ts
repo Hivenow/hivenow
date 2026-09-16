@@ -61,8 +61,15 @@ export async function POST(req: Request) {
       },
     });
 
+    // Optional prefix: "campaigns" (default), "products", etc.
+    const prefix = (formData.get("prefix") as string | null)?.trim() || "campaigns";
+    const allowedPrefixes = ["campaigns", "products", "banners", "boutiques"];
+    if (!allowedPrefixes.includes(prefix)) {
+      return NextResponse.json({ error: `Invalid prefix. Allowed: ${allowedPrefixes.join(", ")}` }, { status: 400 });
+    }
+
     const fileExtension = file.name.split(".").pop() || "jpg";
-    const key = `campaigns/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+    const key = `${prefix}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
     const arrayBuffer = await file.arrayBuffer();
 
     await R2.send(
@@ -77,7 +84,7 @@ export async function POST(req: Request) {
 
     const publicUrl = `${publicDomain.replace(/\/$/, "")}/${key}`;
 
-    return NextResponse.json({ success: true, url: publicUrl });
+    return NextResponse.json({ success: true, url: publicUrl, objectKey: key });
   } catch (error: any) {
     console.error("R2 Upload Route Failure:", error);
     return NextResponse.json(

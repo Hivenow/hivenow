@@ -11,7 +11,6 @@ import { getPublicUrl, extractR2ObjectKeys } from "./media/api";
 import { getAllowedSpecKeys, validateAndCleanProductDetails, validateProductDetailsForCategory } from "./lib/verticals";
 import { getPlatformSettings, calculateProductPricing } from "./pricingService";
 import { triggerNotification } from "./lib/notifications";
-import { resolveMetricsNow, adminMetricsWindows } from "./lib/adminMetricsTime";
 
 
 /**
@@ -275,24 +274,11 @@ export const getAdminProducts = query({
  * Returns overall clamped Catalog Health Score, Revenue at Risk (paise), and Failing Quality Gate Count.
  */
 export const getCatalogDashboardMetricsAdmin = query({
-  args: {
-    /**
-     * The caller's clock, rounded down to a bucket (see lib/adminMetricsTime).
-     *
-     * Production logs showed this query re-running every ~51 seconds for 36
-     * minutes with no write in the 10 seconds before any run, purely because
-     * the admin Products page was open: Date.now() in the handler makes Convex
-     * invalidate the cached result frequently, and each run re-read every
-     * active product and 30 days of orders.
-     *
-     * Optional, so a client deployed before this argument keeps working.
-     */
-    nowBucket: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     await requireRole(ctx, "admin");
 
-    const { thirtyDaysAgo } = adminMetricsWindows(resolveMetricsNow(args.nowBucket));
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
 
     // TODO: Maintain a counter or table of active counts to avoid full scan for allProducts/orders
     const allProducts = await ctx.db.query("products").withIndex("by_active", q => q.eq("active", true)).collect();
@@ -335,47 +321,35 @@ export const getCatalogDashboardMetricsAdmin = query({
     const rawScore = averageQuality - (disputeRate * 5) - (moderatedRatio * 50);
     const catalogHealthScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
-    // Revenue at Risk (Delivered or Paid in last 30 days from inactive/moderated/quality < 60 products).
-    //
-    // `orders` above is the same 30-day window this used to read a second time
-    // from the same index with the same bound, so it is reused rather than
-    // re-read.
-    const recentOrdersFiltered = orders.filter(
+    // Revenue at Risk (Delivered or Paid in last 30 days from inactive/moderated/quality < 60 products)
+    const recentOrders = await ctx.db
+      .query("orders")
+      .withIndex("by_createdAt", q => q.gte("createdAt", thirtyDaysAgo))
+      .collect();
+
+    const recentOrdersFiltered = recentOrders.filter(
       (o) => o.status === "delivered" || o.paymentStatus === "paid"
     );
 
-    // Items for those orders in one batch, then each distinct product once.
-    // Previously this awaited an orderItems query per order and a ctx.db.get
-    // per item, so an order appearing twice re-read the same product document
-    // twice.
-    const itemsPerOrder = await Promise.all(
-      recentOrdersFiltered.map((order) =>
-        ctx.db
-          .query("orderItems")
-          .withIndex("by_orderId", (q: any) => q.eq("orderId", order._id))
-          .collect()
-      )
-    );
-    const riskItems = itemsPerOrder.flat();
-
-    const riskProductIds = Array.from(new Set(riskItems.map((item) => item.productId)));
-    const riskProducts = await Promise.all(riskProductIds.map((id) => ctx.db.get(id)));
-    const riskProductById = new Map(
-      riskProducts.filter(Boolean).map((product) => [product!._id, product!])
-    );
-
     let revenueAtRisk = 0;
-    for (const item of riskItems) {
-      const product = riskProductById.get(item.productId);
-      if (!product) continue;
+    for (const order of recentOrdersFiltered) {
+      const orderItems = await ctx.db
+        .query("orderItems")
+        .withIndex("by_orderId", (q: any) => q.eq("orderId", order._id))
+        .collect();
 
-      const category = categoryMap.get(product.categoryId);
-      const categoryName = category?.name || "Uncategorized";
-      const { qualityScore } = computeQualityChecks(product, categoryName);
+      for (const item of orderItems) {
+        const product = await ctx.db.get(item.productId);
+        if (!product) continue;
 
-      const isAtRisk = !product.active || product.adminHidden === true || qualityScore < 60;
-      if (isAtRisk) {
-        revenueAtRisk += item.subtotal || (item.priceAtPurchase * item.quantity);
+        const category = categoryMap.get(product.categoryId);
+        const categoryName = category?.name || "Uncategorized";
+        const { qualityScore } = computeQualityChecks(product, categoryName);
+
+        const isAtRisk = !product.active || product.adminHidden === true || qualityScore < 60;
+        if (isAtRisk) {
+          revenueAtRisk += item.subtotal || (item.priceAtPurchase * item.quantity);
+        }
       }
     }
 
@@ -914,5 +888,110 @@ export const deleteProductAdmin = mutation({
     });
 
     return { productId: args.productId, objectKeys };
+  },
+});
+
+// ─── ADMIN IMAGE REPLACE ────────────────────────────────────────────────────
+
+/**
+ * Admin-only mutation that replaces a single image in a product's images array.
+ *
+ * Used by the admin crop workflow: the frontend crops the image client-side,
+ * uploads the cropped version to R2 via /api/upload/r2, then calls this mutation
+ * to swap the old entry (string URL or ImageAsset) with the new one.
+ *
+ * The old R2 object (if it was an ImageAsset) is scheduled for deletion.
+ */
+export const replaceProductImageAdmin = mutation({
+  args: {
+    productId: v.id("products"),
+    imageIndex: v.number(),
+    // The new image — can be a plain URL string or a full ImageAsset object
+    newImage: v.union(
+      v.string(),
+      v.object({
+        assetId: v.string(),
+        ownerType: v.string(),
+        ownerId: v.string(),
+        storageProvider: v.string(),
+        bucket: v.string(),
+        objectKey: v.string(),
+        status: v.union(v.literal("pending"), v.literal("processing"), v.literal("ready"), v.literal("failed"), v.literal("deleted")),
+        displayOrder: v.number(),
+        width: v.number(),
+        height: v.number(),
+        size: v.number(),
+        mime: v.string(),
+        checksum: v.optional(v.string()),
+        contentHash: v.optional(v.string()),
+        alt: v.optional(v.string()),
+        imageRole: v.optional(
+          v.union(
+            v.literal("PRIMARY"),
+            v.literal("BACK"),
+            v.literal("DETAIL"),
+            v.literal("FABRIC"),
+            v.literal("LIFESTYLE"),
+            v.literal("OTHER")
+          )
+        ),
+        variants: v.optional(v.object({
+          thumbnail: v.optional(v.string()),
+          card: v.optional(v.string()),
+          pdp: v.optional(v.string()),
+          zoom: v.optional(v.string()),
+        })),
+        uploadedAt: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireRole(ctx, "admin");
+    const product = await ctx.db.get(args.productId);
+    if (!product) throw new Error("Product not found");
+
+    const images = [...(product.images || [])];
+    if (args.imageIndex < 0 || args.imageIndex >= images.length) {
+      throw new Error(`Invalid image index ${args.imageIndex}. Product has ${images.length} images.`);
+    }
+
+    // Capture old image for potential R2 cleanup
+    const oldImage = images[args.imageIndex];
+    const oldObjectKeys = extractR2ObjectKeys([oldImage]);
+
+    // Replace the image at the specified index
+    images[args.imageIndex] = args.newImage as any;
+
+    const now = Date.now();
+    await ctx.db.patch(args.productId, {
+      images,
+      updatedAt: now,
+    });
+
+    // Schedule R2 cleanup for the old image
+    if (oldObjectKeys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
+        objectKeys: oldObjectKeys,
+        actorId: admin._id,
+      });
+    }
+
+    // Audit log
+    await ctx.db.insert("auditLogs", {
+      actorId: admin._id,
+      actorRole: "admin",
+      action: "product.image_replaced_admin",
+      entityType: "products",
+      entityId: args.productId,
+      metadata: JSON.stringify({
+        productName: product.name,
+        imageIndex: args.imageIndex,
+        oldObjectKeys,
+        newImageType: typeof args.newImage === "string" ? "url" : "ImageAsset",
+      }),
+      createdAt: now,
+    });
+
+    return { productId: args.productId, imageIndex: args.imageIndex };
   },
 });

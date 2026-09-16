@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import { Button, Card, CardContent, Modal, cn } from "@hive/ui";
 import { ProductInspectionDrawer } from "@/components/ProductInspectionDrawer";
+import { ImageCropModal } from "@/components/ImageCropModal";
 import { useMetricsBucket } from "@/hooks/useMetricsBucket";
 
 import { 
@@ -27,7 +28,8 @@ import {
   CheckCircle2,
   XCircle,
   Info,
-  Trash2
+  Trash2,
+  Crop
 } from "lucide-react";
 
 const MODERATION_CATEGORIES = [
@@ -150,6 +152,13 @@ export default function AdminProductsPage() {
     api.adminProducts.getProductModerationHistory,
     historyProduct ? { productId: historyProduct._id } : "skip"
   );
+
+  // Image Crop Modal State (for moderation history modal)
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageUrl, setCropImageUrl] = useState("");
+  const [cropImageIndex, setCropImageIndex] = useState(0);
+  const [cropProductId, setCropProductId] = useState("");
+  const [cropProductName, setCropProductName] = useState("");
 
   const openActionModal = (product: any, action: "deactivate" | "reactivate" | "hide" | "unhide" | "delete") => {
     setSelectedProduct(product);
@@ -972,15 +981,32 @@ export default function AdminProductsPage() {
                 </h4>
                 <div className="flex gap-3 overflow-x-auto pb-2 snap-x scrollbar-thin scrollbar-thumb-slate-200">
                   {historyProduct.imageUrls.map((url: string, idx: number) => (
-                    <a key={idx} href={url} target="_blank" rel="noreferrer" className="w-32 h-40 shrink-0 rounded-xl border bg-slate-50 overflow-hidden snap-start relative group block cursor-zoom-in">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Product Image ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <div key={idx} className="w-32 h-40 shrink-0 rounded-xl border bg-slate-50 overflow-hidden snap-start relative group/himg block">
+                      <a href={url} target="_blank" rel="noreferrer" className="block w-full h-full cursor-zoom-in">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt={`Product Image ${idx + 1}`} className="w-full h-full object-cover group-hover/himg:scale-105 transition-transform duration-300" />
+                      </a>
                       {idx === 0 && (
                         <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
                           Primary
                         </div>
                       )}
-                    </a>
+                      {/* Crop button overlay */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCropImageUrl(url);
+                          setCropImageIndex(idx);
+                          setCropProductId(historyProduct._id);
+                          setCropProductName(historyProduct.name);
+                          setCropModalOpen(true);
+                        }}
+                        className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-white/90 backdrop-blur-md border border-white/40 text-stone-600 hover:bg-white hover:text-amber-700 shadow transition-all opacity-0 group-hover/himg:opacity-100 z-10 cursor-pointer"
+                        title={`Crop image ${idx + 1}`}
+                      >
+                        <Crop className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1096,6 +1122,27 @@ export default function AdminProductsPage() {
           categories={categories || []}
         />
       )}
+
+      {/* Image Crop Modal (for moderation history) */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        onClose={() => setCropModalOpen(false)}
+        imageUrl={cropImageUrl}
+        imageIndex={cropImageIndex}
+        productId={cropProductId}
+        productName={cropProductName}
+        onCropComplete={(newUrl, idx) => {
+          setCropModalOpen(false);
+          if (newUrl && typeof idx === "number" && historyProduct?.imageUrls) {
+            setHistoryProduct((prev: any) => {
+              if (!prev) return prev;
+              const nextUrls = [...(prev.imageUrls || [])];
+              nextUrls[idx] = newUrl;
+              return { ...prev, imageUrls: nextUrls };
+            });
+          }
+        }}
+      />
     </div>
   );
 }

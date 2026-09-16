@@ -125,13 +125,10 @@ export type MergeResolution = "keep_guest" | "keep_account";
 export type MergePlan =
   | { kind: "no_change"; lines: PlanLine[]; droppedGuestLines: DroppedLine[] }
   | {
-      /**
-       * The guest bag holds lines from more than one boutique, which the one-boutique bag model
-       * never produces. Treated as invalid state: nothing is merged or written, and no boutique is
-       * chosen on the shopper's behalf. The caller returns both sets so the shopper decides.
-       */
+      // The device guest bag itself spans more than one boutique — corrupt or legacy local state.
+      // The caller writes nothing; the client repairs the bag or asks. Never silently discard the
+      // lines of one boutique.
       kind: "invalid_guest_bag";
-      reason: "mixed_boutiques";
       guestBoutiqueIds: string[];
       guestLines: PlanLine[];
       droppedGuestLines: DroppedLine[];
@@ -182,9 +179,9 @@ function fillToLineLimit(base: PlanLine[], extra: PlanLine[]): { lines: PlanLine
  * Plans how a device guest bag joins an account cart at sign-in (spec §6).
  *
  * - Empty guest bag: no change.
- * - Guest bag spanning more than one boutique: invalid state ("invalid_guest_bag"). Nothing is
- *   merged and no boutique is picked implicitly; the shopper decides.
  * - Account cart empty: the guest bag becomes the cart.
+ * - Mixed guest bag: the device bag itself spans two boutiques — invalid state, returned as
+ *   "invalid_guest_bag" so the caller can repair or ask; nothing is written.
  * - Same boutique: combine; a shared product + size takes max(guest, account) quantity, never the
  *   sum, so replaying the same guest bag is idempotent. Account lines are always kept; guest-only
  *   lines fill the remaining MAX_LINES slots earliest-first, the rest are dropped with "line_limit".
@@ -201,24 +198,26 @@ export function planGuestMerge(input: GuestMergeInput): MergePlan {
     if (!ok) invalid.push({ line: l, reason: "invalid_quantity" });
     return ok;
   });
-  const guestSingle = dedupeLines(validGuest);
+  const guestDeduped = dedupeLines(validGuest);
   const droppedBeforeMerge = invalid;
 
-  if (guestSingle.length === 0) {
+  if (guestDeduped.length === 0) {
     return { kind: "no_change", lines: accountLines, droppedGuestLines: droppedBeforeMerge };
   }
 
-  if (cartBoutique(guestSingle).kind === "mixed") {
+  // The one-boutique-per-bag invariant applies to the device bag too. A mixed guest bag is
+  // corrupt/legacy local state; surface it rather than silently keeping one boutique's lines.
+  const guestBoutiqueInfo = cartBoutique(guestDeduped);
+  if (guestBoutiqueInfo.kind === "mixed") {
     return {
       kind: "invalid_guest_bag",
-      reason: "mixed_boutiques",
-      guestBoutiqueIds: [...new Set(guestSingle.map((l) => l.boutiqueId))].sort(),
-      guestLines: guestSingle,
+      guestBoutiqueIds: [...new Set(guestDeduped.map((l) => l.boutiqueId))],
+      guestLines: guestDeduped,
       droppedGuestLines: droppedBeforeMerge,
     };
   }
 
-  const guestFitted = fillToLineLimit([], capAll(guestSingle, availableByKey));
+  const guestFitted = fillToLineLimit([], capAll(guestDeduped, availableByKey));
 
   if (accountLines.length === 0) {
     return {
@@ -230,12 +229,12 @@ export function planGuestMerge(input: GuestMergeInput): MergePlan {
   }
 
   const accountBoutique = accountLines[0]!.boutiqueId;
-  const guestBoutique = guestSingle[0]!.boutiqueId;
+  const guestBoutique = guestDeduped[0]!.boutiqueId;
 
   if (accountBoutique === guestBoutique) {
     const byKey = new Map(accountLines.map((l) => [lineKey(l.productId, l.size), { ...l }]));
     const guestOnly: PlanLine[] = [];
-    for (const g of guestSingle) {
+    for (const g of guestDeduped) {
       const key = lineKey(g.productId, g.size);
       const existing = byKey.get(key);
       if (existing) {
@@ -281,6 +280,6 @@ export function planGuestMerge(input: GuestMergeInput): MergePlan {
     kind: "merged",
     lines: accountLines,
     droppedGuestLines: droppedBeforeMerge,
-    displacedLines: guestSingle,
+    displacedLines: guestDeduped,
   };
 }
