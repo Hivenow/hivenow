@@ -1,6 +1,4 @@
-import Image from "next/image";
 import Link from "next/link";
-import logoImg from "../../../public/logo.png";
 
 interface HiveLogoProps {
   roleLabel?: "ADMIN PANEL" | "DESIGNER PANEL" | "Seller Portal" | "SELLER CENTER" | string;

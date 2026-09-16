@@ -79,6 +79,7 @@ import type * as lib_porter from "../lib/porter.js";
 import type * as lib_porterAddress from "../lib/porterAddress.js";
 import type * as lib_porterBooking from "../lib/porterBooking.js";
 import type * as lib_porterSync from "../lib/porterSync.js";
+import type * as lib_productSearch from "../lib/productSearch.js";
 import type * as lib_productStats from "../lib/productStats.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_refunds from "../lib/refunds.js";
@@ -277,6 +278,7 @@ declare const fullApi: ApiFromModules<{
   "lib/porterAddress": typeof lib_porterAddress;
   "lib/porterBooking": typeof lib_porterBooking;
   "lib/porterSync": typeof lib_porterSync;
+  "lib/productSearch": typeof lib_productSearch;
   "lib/productStats": typeof lib_productStats;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/refunds": typeof lib_refunds;

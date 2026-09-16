@@ -292,6 +292,7 @@ export const Navbar: React.FC = () => {
       }
       router.push(`/search?q=${encodeURIComponent(query)}`);
       setMobileMenuOpen(false);
+      setSearchOpen(false);
     }
   };
 
@@ -944,16 +945,24 @@ export const Navbar: React.FC = () => {
               <ArrowLeft className="w-5 h-5" />
             </button>
             
-            <div className="flex-1 relative flex items-center">
+            {/* Two submit paths on purpose. Android soft keyboards often report the Go key as
+                key "" / keyCode 229, so an Enter keydown check alone does nothing on phones —
+                the form's implicit submission covers that. Some environments dispatch a real
+                "Enter" keydown without triggering implicit submission, so keydown handles that.
+                handleSearchSubmit calls preventDefault on the keydown, which stops the form
+                from submitting a second time. */}
+            <form role="search" onSubmit={handleSearchSubmit} className="flex-1 relative flex items-center">
               <Search className="w-4 h-4 text-hive-dark/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />
               <input
                 ref={inputRef}
                 type="text"
+                enterKeyHint="search"
                 placeholder="Search collections, fabrics, styles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  // isComposing: Malayalam/Hindi IME keyboards use Enter to confirm a word.
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                     handleSearchSubmit(e);
                   } else if (e.key === "Escape") {
                     setSearchOpen(false);
@@ -971,7 +980,7 @@ export const Navbar: React.FC = () => {
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
-            </div>
+            </form>
           </div>
 
           {/* Content area */}
