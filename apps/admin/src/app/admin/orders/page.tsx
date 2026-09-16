@@ -34,6 +34,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
+import { useMetricsBucket } from "@/hooks/useMetricsBucket";
 
 // ── Status badge helper ────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -145,26 +146,36 @@ function AdminInvoiceSection({ orderId }: { orderId: Id<"orders"> }) {
 }
 
 // ── Admin Invoice Table Cell (compact) ────────────────────────────────────
-function AdminInvoiceTableCell({ orderId }: { orderId: Id<"orders"> }) {
-  const invoice = useQuery(api.invoices.getInvoiceByOrderId_admin, { orderId });
-
-  if (invoice === undefined) {
-    return <span className="inline-block w-16 h-4 bg-slate-100 rounded animate-pulse" />;
-  }
-
-  if (!invoice || !invoice.pdfUrl) {
+/**
+ * Renders the invoice column from the row the table already has.
+ *
+ * This used to run its own useQuery per row. With the list fetched at
+ * limit: 200 that meant up to ~200 invoice subscriptions for one page view,
+ * and invoices.getInvoiceByOrderId_admin became the most-called function in
+ * the deployment. getAllOrders already returns invoiceNumber and invoicePdfUrl
+ * for every row, so the query was fetching data the page had in hand. The
+ * order detail drawer still queries the full invoice, where it is needed.
+ */
+function AdminInvoiceTableCell({
+  invoiceNumber,
+  invoicePdfUrl,
+}: {
+  invoiceNumber: string | null;
+  invoicePdfUrl: string | null;
+}) {
+  if (!invoiceNumber || !invoicePdfUrl) {
     return (
       <span className="text-[9px] text-slate-400 font-medium italic whitespace-nowrap">
-        {!invoice ? "No invoice" : "PDF pending"}
+        {!invoiceNumber ? "No invoice" : "PDF pending"}
       </span>
     );
   }
 
   return (
     <button
-      onClick={() => window.open(invoice.pdfUrl!, "_blank")}
+      onClick={() => window.open(invoicePdfUrl, "_blank")}
       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-hive-border bg-white text-[9px] font-bold text-hive-dark hover:bg-hive-cream hover:border-hive-gold transition-colors whitespace-nowrap"
-      title={invoice.invoiceNumber}
+      title={invoiceNumber}
     >
       <FileDown className="w-3 h-3 text-hive-gold" />
       PDF
@@ -819,8 +830,11 @@ function OrderDetailDrawer({
 // ── Main Orders Page ───────────────────────────────────────────────────────
 export default function AdminOrdersPage() {
   const { isLoading: convexAuthLoading } = useConvexAuth();
+  const nowBucket = useMetricsBucket();
   const orders = useQuery(api.adminOrders.getAllOrders, { limit: 200 });
-  const metrics = useQuery(api.adminOrders.getAdminDashboardMetrics);
+  // Same bucketed clock the admin home page sends, so both routes share one
+  // cached execution instead of each invalidating on its own schedule.
+  const metrics = useQuery(api.adminOrders.getAdminDashboardMetrics, { nowBucket });
   const triggerSlaSweep = useMutation(api.orders.triggerSlaOrderSweepAdmin);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -1189,7 +1203,10 @@ export default function AdminOrdersPage() {
                       <PaymentBadge status={order.paymentStatus} />
                     </td>
                     <td className="px-5 py-4 text-center">
-                      <AdminInvoiceTableCell orderId={order._id} />
+                      <AdminInvoiceTableCell
+                        invoiceNumber={order.invoiceNumber ?? null}
+                        invoicePdfUrl={order.invoicePdfUrl ?? null}
+                      />
                     </td>
                     <td className="px-5 py-4 text-center">
                       <button

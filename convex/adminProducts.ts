@@ -11,6 +11,7 @@ import { getPublicUrl, extractR2ObjectKeys } from "./media/api";
 import { getAllowedSpecKeys, validateAndCleanProductDetails, validateProductDetailsForCategory } from "./lib/verticals";
 import { getPlatformSettings, calculateProductPricing } from "./pricingService";
 import { triggerNotification } from "./lib/notifications";
+import { resolveMetricsNow, adminMetricsWindows } from "./lib/adminMetricsTime";
 
 
 /**
@@ -274,11 +275,24 @@ export const getAdminProducts = query({
  * Returns overall clamped Catalog Health Score, Revenue at Risk (paise), and Failing Quality Gate Count.
  */
 export const getCatalogDashboardMetricsAdmin = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    /**
+     * The caller's clock, rounded down to a bucket (see lib/adminMetricsTime).
+     *
+     * Production logs showed this query re-running every ~51 seconds for 36
+     * minutes with no write in the 10 seconds before any run, purely because
+     * the admin Products page was open: Date.now() in the handler makes Convex
+     * invalidate the cached result frequently, and each run re-read every
+     * active product and 30 days of orders.
+     *
+     * Optional, so a client deployed before this argument keeps working.
+     */
+    nowBucket: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     await requireRole(ctx, "admin");
 
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const { thirtyDaysAgo } = adminMetricsWindows(resolveMetricsNow(args.nowBucket));
 
     // TODO: Maintain a counter or table of active counts to avoid full scan for allProducts/orders
     const allProducts = await ctx.db.query("products").withIndex("by_active", q => q.eq("active", true)).collect();
@@ -321,35 +335,47 @@ export const getCatalogDashboardMetricsAdmin = query({
     const rawScore = averageQuality - (disputeRate * 5) - (moderatedRatio * 50);
     const catalogHealthScore = Math.max(0, Math.min(100, Math.round(rawScore)));
 
-    // Revenue at Risk (Delivered or Paid in last 30 days from inactive/moderated/quality < 60 products)
-    const recentOrders = await ctx.db
-      .query("orders")
-      .withIndex("by_createdAt", q => q.gte("createdAt", thirtyDaysAgo))
-      .collect();
-
-    const recentOrdersFiltered = recentOrders.filter(
+    // Revenue at Risk (Delivered or Paid in last 30 days from inactive/moderated/quality < 60 products).
+    //
+    // `orders` above is the same 30-day window this used to read a second time
+    // from the same index with the same bound, so it is reused rather than
+    // re-read.
+    const recentOrdersFiltered = orders.filter(
       (o) => o.status === "delivered" || o.paymentStatus === "paid"
     );
 
+    // Items for those orders in one batch, then each distinct product once.
+    // Previously this awaited an orderItems query per order and a ctx.db.get
+    // per item, so an order appearing twice re-read the same product document
+    // twice.
+    const itemsPerOrder = await Promise.all(
+      recentOrdersFiltered.map((order) =>
+        ctx.db
+          .query("orderItems")
+          .withIndex("by_orderId", (q: any) => q.eq("orderId", order._id))
+          .collect()
+      )
+    );
+    const riskItems = itemsPerOrder.flat();
+
+    const riskProductIds = Array.from(new Set(riskItems.map((item) => item.productId)));
+    const riskProducts = await Promise.all(riskProductIds.map((id) => ctx.db.get(id)));
+    const riskProductById = new Map(
+      riskProducts.filter(Boolean).map((product) => [product!._id, product!])
+    );
+
     let revenueAtRisk = 0;
-    for (const order of recentOrdersFiltered) {
-      const orderItems = await ctx.db
-        .query("orderItems")
-        .withIndex("by_orderId", (q: any) => q.eq("orderId", order._id))
-        .collect();
+    for (const item of riskItems) {
+      const product = riskProductById.get(item.productId);
+      if (!product) continue;
 
-      for (const item of orderItems) {
-        const product = await ctx.db.get(item.productId);
-        if (!product) continue;
+      const category = categoryMap.get(product.categoryId);
+      const categoryName = category?.name || "Uncategorized";
+      const { qualityScore } = computeQualityChecks(product, categoryName);
 
-        const category = categoryMap.get(product.categoryId);
-        const categoryName = category?.name || "Uncategorized";
-        const { qualityScore } = computeQualityChecks(product, categoryName);
-
-        const isAtRisk = !product.active || product.adminHidden === true || qualityScore < 60;
-        if (isAtRisk) {
-          revenueAtRisk += item.subtotal || (item.priceAtPurchase * item.quantity);
-        }
+      const isAtRisk = !product.active || product.adminHidden === true || qualityScore < 60;
+      if (isAtRisk) {
+        revenueAtRisk += item.subtotal || (item.priceAtPurchase * item.quantity);
       }
     }
 

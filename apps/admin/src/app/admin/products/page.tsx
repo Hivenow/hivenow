@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import { Button, Card, CardContent, Modal, cn } from "@hive/ui";
 import { ProductInspectionDrawer } from "@/components/ProductInspectionDrawer";
+import { useMetricsBucket } from "@/hooks/useMetricsBucket";
 
 import { 
   Loader2, 
@@ -95,7 +96,10 @@ export default function AdminProductsPage() {
     sortBy,
   });
 
-  const kpis = useQuery(api.adminProducts.getCatalogDashboardMetricsAdmin, {});
+  // Bucketed clock: this query was observed re-running every ~51 seconds
+  // with no data change while this page was open. See hooks/useMetricsBucket.
+  const nowBucket = useMetricsBucket();
+  const kpis = useQuery(api.adminProducts.getCatalogDashboardMetricsAdmin, { nowBucket });
   const categories = useQuery(api.categories.getCategories, {});
 
   const deactivateProduct = useMutation(api.adminProducts.deactivateProductAdmin);

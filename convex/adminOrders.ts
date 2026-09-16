@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { triggerNotification } from "./lib/notifications";
 import { markOrderFinanciallyDelivered, markOrderPayoutEligible } from "./adminFinance";
 import { recordOrderActivity } from "./lib/orderActivity";
+import { adminMetricsWindows, resolveMetricsNow } from "./lib/adminMetricsTime";
 import { refundCancelledOrder } from "./lib/refunds";
 import {
   buildCustomerPorterAddress,
@@ -136,9 +137,33 @@ export const backfillDashboardMetrics = internalMutation({
  * and the 10 most recent orders across ALL boutiques.
  */
 export const getAdminDashboardMetrics = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    /**
+     * The caller's clock, rounded down to a bucket (see lib/adminMetricsTime).
+     *
+     * Reading Date.now() in the handler made Convex invalidate this query's
+     * cache frequently, so an open admin tab re-read most of the orders and
+     * products tables every minute or so with nothing changed. Taking the time
+     * as an argument makes the query a pure function of its arguments again.
+     *
+     * Optional so an admin client deployed before this argument existed keeps
+     * working unchanged; it then falls back to server time, i.e. the old
+     * behaviour.
+     */
+    nowBucket: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     await requireRole(ctx, "admin");
+
+    const now = resolveMetricsNow(args.nowBucket);
+    const {
+      startOfToday,
+      thirtyDaysAgo,
+      twentyFourHoursAgo,
+      twelveHoursAgo,
+      thirtyMinutesAgo,
+      tenMinutesAgo,
+    } = adminMetricsWindows(now);
 
     const [
       pendingConfirmationList,
@@ -208,9 +233,8 @@ export const getAdminDashboardMetrics = query({
     // Revenue computed from delivered orders
     const totalRevenue = deliveredList.reduce((sum, o) => sum + (o.total || 0), 0);
 
-    // Command Center calculations
-    const nowDate = new Date();
-    const startOfToday = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate());
+    // Command Center calculations. startOfToday comes from the caller's bucket
+    // above rather than a fresh clock read.
     const todayOrders = await ctx.db
       .query("orders")
       .withIndex("by_createdAt", (q) => q.gte("createdAt", startOfToday))
@@ -242,7 +266,6 @@ export const getAdminDashboardMetrics = query({
 
     const refundedOrdersCount = allOrders.filter(o => o.status === "refunded" || o.paymentStatus === "refunded").length;
     const refundRate = allOrders.length > 0 ? (refundedOrdersCount / allOrders.length) * 100 : 0;
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const claims = await ctx.db
       .query("claims")
       .withIndex("by_createdAt", (q) => q.gte("createdAt", thirtyDaysAgo))
@@ -322,10 +345,8 @@ export const getAdminDashboardMetrics = query({
     });
 
     // --- Compute Needs Attention Operational Queues ---
-    const now = Date.now();
-    const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
-    const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
-    const tenMinutesAgo = now - 10 * 60 * 1000;
+    // now / twelveHoursAgo / twentyFourHoursAgo / tenMinutesAgo all come from
+    // the single bucketed clock resolved at the top of this handler.
 
     // 1. Orders Pending > 12h (in pending_confirmation or confirmed)
     const ordersPendingOver12h = [...pendingConfirmationList, ...confirmedList].filter(
@@ -400,7 +421,6 @@ export const getAdminDashboardMetrics = query({
     const pendingProductsReviewCount = pendingProductsList.length;
 
     // 8. Dynamic operational queues
-    const thirtyMinutesAgo = now - 30 * 60 * 1000;
     const waitingOver15m = pendingConfirmationList.filter(
       (o) => o.createdAt < tenMinutesAgo && o.createdAt >= thirtyMinutesAgo
     ).length;

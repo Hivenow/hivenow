@@ -10,6 +10,7 @@ import { Store, CheckCircle, FolderKanban, Image as ImageIcon, ArrowRight, Loade
 import Link from "next/link";
 import { PWAStatsCard } from "../../components/pwa/PWAStatsCard";
 import { BroadcastCampaignModal } from "../../components/pwa/BroadcastCampaignModal";
+import { useMetricsBucket } from "@/hooks/useMetricsBucket";
 
 export default function AdminDashboardPage() {
   const { isLoading: convexAuthLoading, isAuthenticated } = useConvexAuth();
@@ -17,7 +18,11 @@ export default function AdminDashboardPage() {
   const boutiques = useQuery(api.boutiques.getBoutiques, { excludeTestData: true });
   const categories = useQuery(api.categories.getCategories, {});
   const banners = useQuery(api.banners.getBanners, {});
-  const orderMetrics = useQuery(api.adminOrders.getAdminDashboardMetrics, {});
+  // Bucketed clock: see hooks/useMetricsBucket. Keeps this query a pure
+  // function of its arguments instead of re-running on Convex's time-based
+  // cache invalidation while the dashboard sits open.
+  const nowBucket = useMetricsBucket();
+  const orderMetrics = useQuery(api.adminOrders.getAdminDashboardMetrics, { nowBucket });
 
   // Track how long we've been waiting â€” if Convex auth is ready but queries
   // still return undefined, it means the query threw a role error (FORBIDDEN).
