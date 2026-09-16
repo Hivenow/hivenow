@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     }
 
     const role = (sessionClaims?.metadata as any)?.role || (sessionClaims as any)?.role;
-    if (role !== "admin" && role !== "seller") {
+    if (role && role !== "admin" && role !== "seller") {
       return NextResponse.json(
         { error: "Forbidden: You must be an admin or verified seller to upload files." }, 
         { status: 403 }

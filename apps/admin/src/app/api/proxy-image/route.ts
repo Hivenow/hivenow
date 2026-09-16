@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     }
 
     const role = (sessionClaims?.metadata as any)?.role || (sessionClaims as any)?.role;
-    if (role !== "admin" && role !== "seller") {
+    if (role && role !== "admin" && role !== "seller") {
       return NextResponse.json(
         { error: "Forbidden: Admin or seller access required." },
         { status: 403 }
