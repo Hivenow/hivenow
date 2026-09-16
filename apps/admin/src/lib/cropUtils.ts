@@ -14,6 +14,20 @@ export interface CropArea {
 }
 
 /**
+ * Resolves an image URL so it is safe to load and draw onto a canvas.
+ * Remote URLs (such as cdn.hivenow.in or R2) are routed through the local
+ * admin /api/proxy-image endpoint to guarantee zero CORS failures.
+ */
+export function getProxiedImageUrl(srcUrl: string): string {
+  if (!srcUrl) return "";
+  // Data URLs, Blob URLs, and relative URLs don't need proxying
+  if (srcUrl.startsWith("data:") || srcUrl.startsWith("blob:") || srcUrl.startsWith("/")) {
+    return srcUrl;
+  }
+  return `/api/proxy-image?url=${encodeURIComponent(srcUrl)}`;
+}
+
+/**
  * Crop a remote or local image using a Canvas 2D context.
  *
  * @param srcUrl         — URL of the source image (R2 CDN, blob:, etc.)
@@ -28,9 +42,14 @@ export function cropImageToBlob(
   outputMime = "image/webp",
   quality = 0.92
 ): Promise<Blob> {
+  const safeUrl = getProxiedImageUrl(srcUrl);
+
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // Only set crossOrigin if external (not same-origin proxy)
+    if (!safeUrl.startsWith("/")) {
+      img.crossOrigin = "anonymous";
+    }
 
     img.onload = () => {
       const canvas = document.createElement("canvas");
@@ -76,6 +95,6 @@ export function cropImageToBlob(
       reject(new Error(`Failed to load image: ${srcUrl}`));
     };
 
-    img.src = srcUrl;
+    img.src = safeUrl;
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import Cropper from "react-easy-crop";
 import { useMutation } from "convex/react";
 import { api } from "@convex/api";
@@ -16,7 +16,7 @@ import {
   Check,
   AlertTriangle,
 } from "lucide-react";
-import { cropImageToBlob, type CropArea } from "@/lib/cropUtils";
+import { cropImageToBlob, getProxiedImageUrl, type CropArea } from "@/lib/cropUtils";
 
 // ── Aspect ratio presets ────────────────────────────────────────────────────
 
@@ -72,6 +72,7 @@ export function ImageCropModal({
   const replaceImage = useMutation(api.adminProducts.replaceProductImageAdmin);
 
   const currentAspect: AspectPreset = ASPECT_PRESETS[aspectIndex] ?? (ASPECT_PRESETS[0] as AspectPreset);
+  const safeImageUrl = useMemo(() => getProxiedImageUrl(imageUrl), [imageUrl]);
 
   const onCropChange = useCallback((c: { x: number; y: number }) => setCrop(c), []);
   const onZoomChange = useCallback((z: number) => setZoom(z), []);
@@ -89,9 +90,9 @@ export function ImageCropModal({
     if (!croppedAreaPixels) return;
 
     try {
-      // 1. Crop the image client-side
+      // 1. Crop the image client-side using same-origin safe URL
       setStatus("cropping");
-      const blob = await cropImageToBlob(imageUrl, croppedAreaPixels, "image/webp", 0.92);
+      const blob = await cropImageToBlob(safeImageUrl, croppedAreaPixels, "image/webp", 0.92);
 
       // 2. Upload to R2 via admin route
       setStatus("uploading");
@@ -180,7 +181,7 @@ export function ImageCropModal({
           {/* Crop area */}
           <div className="flex-1 relative bg-stone-950 min-h-[400px]">
             <Cropper
-              image={imageUrl}
+              image={safeImageUrl}
               crop={crop}
               zoom={zoom}
               rotation={rotation}
