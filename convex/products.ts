@@ -22,6 +22,7 @@ import { updateBoutiqueProductCount } from "./boutiques";
 import { normalizeEmail } from "./users";
 import { resolveDeliveryLabel, resolveDeliveryCountdown } from "./lib/deliveryEta";
 import { resolveDiscoveryContext } from "./lib/discoveryContext";
+import { rankProducts } from "./lib/productSearch";
 import {
   getAllowedSpecKeys,
   getVerticalConfig,
@@ -2317,229 +2318,41 @@ export const searchProductsInternal = internalQuery({
     userLng: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Sanitize input: convert to lowercase, trim, and strip non-alphanumeric / special characters
-    const term = args.searchTerm.toLowerCase().trim().replace(/[^a-zA-Z0-9\s]/g, "");
-    
-    // Minimum length check to prevent spamming high-cost queries
-    if (term.length < 2) {
-      return { products: [], totalMatchedCount: 0 };
+    // Punctuation-only or single-character input can match nearly everything.
+    if (args.searchTerm.replace(/[^a-zA-Z0-9]/g, "").length < 2) {
+      return { products: [], totalMatchedCount: 0, relatedOnly: false };
     }
 
-    const singularTerm = term.endsWith("es")
-      ? term.slice(0, -2)
-      : term.endsWith("s")
-      ? term.slice(0, -1)
-      : "";
-
-    // Use Convex full-text search index for product names
+    // Every visible product is ranked in memory across name, category, shop, details, material
+    // and description (see lib/productSearch.ts). The name-only search index missed products
+    // whose name lacks the shopper's word, and multi-word queries were scored as one phrase.
     const approvedBoutiqueIds = await getApprovedBoutiqueIds(ctx);
-    const searchResults = await ctx.db
-      .query("products")
-      .withSearchIndex("search_products", (q) =>
-        q.search("name", term).eq("active", true)
-      )
-      .take(50);
+    const [activeProducts, categories, allApprovedBoutiques] = await Promise.all([
+      ctx.db.query("products").withIndex("by_active", (q) => q.eq("active", true)).collect(),
+      ctx.db.query("categories").collect(),
+      ctx.db.query("boutiques").withIndex("by_status", (q) => q.eq("status", "APPROVED")).collect(),
+    ]);
 
-    let stemSearchResults: any[] = [];
-    if (singularTerm && singularTerm.length >= 3) {
-      stemSearchResults = await ctx.db
-        .query("products")
-        .withSearchIndex("search_products", (q) =>
-          q.search("name", singularTerm).eq("active", true)
-        )
-        .take(50);
-    }
-
-    // Fetch categories and match category names
-    const categories = await ctx.db.query("categories").collect();
-    const categoriesMap = new Map(categories.map((c: any) => [c._id, c]));
-
-    const matchedCategories = categories.filter((c: any) => {
-      const cName = (c.name || "").toLowerCase();
-      const cSlug = (c.slug || "").toLowerCase();
-      return (
-        cName.includes(term) ||
-        cSlug.includes(term) ||
-        (singularTerm && (cName.includes(singularTerm) || cSlug.includes(singularTerm)))
-      );
-    });
-
-    const matchedCategoryIds = new Set(matchedCategories.map((c: any) => c._id.toString()));
-
-    // Fetch products belonging to matched categories
-    let categoryProducts: any[] = [];
-    for (const cat of matchedCategories) {
-      const catProds = await ctx.db
-        .query("products")
-        .withIndex("by_categoryId", (q) => q.eq("categoryId", cat._id))
-        .filter((q) => q.eq(q.field("active"), true))
-        .take(40);
-      categoryProducts.push(...catProds);
-    }
-
-    // Also match boutiques/sellers by name, description, area, or city
-    const allApprovedBoutiques = await ctx.db
-      .query("boutiques")
-      .withIndex("by_status", (q) => q.eq("status", "APPROVED"))
-      .collect();
-
-    const matchedBoutiques = allApprovedBoutiques.filter((b: any) => {
-      const bName = (b.boutiqueName || "").toLowerCase();
-      const bDesc = (b.description || "").toLowerCase();
-      const bCity = (b.city || "").toLowerCase();
-      const bArea = (b.area || "").toLowerCase();
-      const bAddress = (b.address || "").toLowerCase();
-      return (
-        bName.includes(term) ||
-        bDesc.includes(term) ||
-        bCity.includes(term) ||
-        bArea.includes(term) ||
-        bAddress.includes(term) ||
-        (singularTerm && (bName.includes(singularTerm) || bDesc.includes(singularTerm)))
-      );
-    });
-
-    const matchedBoutiqueIds = new Set(matchedBoutiques.map((b: any) => b._id.toString()));
-
-    // If any boutiques/sellers matched, fetch their active products
-    let boutiqueProducts: any[] = [];
-    for (const bId of matchedBoutiqueIds) {
-      const bProds = await ctx.db
-        .query("products")
-        .withIndex("by_boutiqueId", (q) => q.eq("boutiqueId", bId as any))
-        .filter((q) => q.eq(q.field("active"), true))
-        .take(40);
-      boutiqueProducts.push(...bProds);
-    }
-
-    // Combine full-text search products + category products + seller-matched products
-    const combinedProductMap = new Map<string, any>();
-    for (const p of searchResults) combinedProductMap.set(p._id.toString(), p);
-    for (const p of stemSearchResults) combinedProductMap.set(p._id.toString(), p);
-    for (const p of categoryProducts) combinedProductMap.set(p._id.toString(), p);
-    for (const p of boutiqueProducts) combinedProductMap.set(p._id.toString(), p);
-
-    const candidateProducts = Array.from(combinedProductMap.values());
-
-    // Filter to approved boutiques only, and exclude hidden/unapproved products
-    const activeProductsFromApprovedBoutiques = candidateProducts.filter(
+    const visibleProducts = activeProducts.filter(
       (p: any) =>
         approvedBoutiqueIds.has(p.boutiqueId) &&
         p.adminHidden !== true &&
         (!p.approvalStatus || p.approvalStatus === "approved")
     );
 
-    // Batch-fetch boutiques referenced by search result products
-    const uniqueBoutiqueIds = Array.from(
-      new Set(activeProductsFromApprovedBoutiques.map((p: any) => p.boutiqueId.toString()))
-    );
-    const boutiqueFetches: any[] = await Promise.all(
-      uniqueBoutiqueIds.map((id) => ctx.db.get(id as any))
-    );
     const boutiquesMap = new Map<string, any>(
-      boutiqueFetches.filter(Boolean).map((b: any) => [b._id.toString(), b])
+      allApprovedBoutiques.map((b: any) => [b._id.toString(), b])
     );
 
-    // Match criteria and compute relevance score (case-insensitive)
-    const scoredProducts = activeProductsFromApprovedBoutiques
-      .map((p: any) => {
-        const category = categoriesMap.get(p.categoryId);
-        const boutique = boutiquesMap.get(p.boutiqueId.toString());
-
-        const productName = (p.name || "").toLowerCase();
-        const categoryName = (category?.name || "").toLowerCase();
-        const boutiqueName = (boutique?.boutiqueName || "").toLowerCase();
-        const description = (p.description || "").toLowerCase();
-
-        let score = 0;
-
-        // If product belongs to an explicitly matched seller
-        if (matchedBoutiqueIds.has(p.boutiqueId.toString())) {
-          score += 150;
-        }
-
-        // If product belongs to an explicitly matched category
-        if (matchedCategoryIds.has(p.categoryId?.toString())) {
-          score += 130;
-        }
-
-        // 1. Name Match
-        if (productName === term) {
-          score += 100;
-        } else if (productName.startsWith(term)) {
-          score += 80;
-        } else {
-          const nameWords = productName.split(/[^a-z0-9]+/);
-          if (nameWords.some((word: string) => word.startsWith(term))) {
-            score += 60;
-          } else if (term.length >= 3 && productName.includes(term)) {
-            score += 30;
-          }
-        }
-
-        // 2. Category Match
-        if (categoryName === term) {
-          score += 50;
-        } else if (categoryName.startsWith(term)) {
-          score += 40;
-        } else {
-          const catWords = categoryName.split(/[^a-z0-9]+/);
-          if (catWords.some((word: string) => word.startsWith(term))) {
-            score += 30;
-          } else if (term.length >= 3 && categoryName.includes(term)) {
-            score += 15;
-          }
-        }
-
-        // 3. Boutique/Seller Match
-        if (boutiqueName === term) {
-          score += 70;
-        } else if (boutiqueName.startsWith(term)) {
-          score += 50;
-        } else {
-          const boutiqueWords = boutiqueName.split(/[^a-z0-9]+/);
-          if (boutiqueWords.some((word: string) => word.startsWith(term))) {
-            score += 35;
-          } else if (term.length >= 3 && boutiqueName.includes(term)) {
-            score += 20;
-          }
-        }
-
-        // 4. Description Match (Only for terms of 3 or more characters)
-        if (term.length >= 3) {
-          if (description.includes(term)) {
-            score += 10;
-          }
-        }
-
-        // 5. Tags Match
-        const tags = (p as any).tags;
-        if (Array.isArray(tags)) {
-          tags.forEach((tag: string) => {
-            const lowerTag = (tag || "").toLowerCase();
-            if (lowerTag === term) {
-              score += 25;
-            } else if (lowerTag.startsWith(term)) {
-              score += 15;
-            } else if (term.length >= 3 && lowerTag.includes(term)) {
-              score += 5;
-            }
-          });
-        }
-
-        return { product: p, score };
-      })
-      .filter((item: any) => item.score > 0);
-
-    // Sort by score descending, then by creation date descending
-    scoredProducts.sort((a: any, b: any) => {
-      if (b.score !== a.score) {
-        return b.score - a.score;
-      }
-      return b.product.createdAt - a.product.createdAt;
+    const ranked = rankProducts(args.searchTerm, visibleProducts, {
+      categoriesById: new Map(categories.map((c: any) => [c._id.toString(), c])),
+      boutiqueNamesById: new Map(
+        allApprovedBoutiques.map((b: any) => [b._id.toString(), b.boutiqueName ?? ""])
+      ),
     });
+    const relatedOnly = ranked.length > 0 && !ranked[0]!.matchedAllTerms;
 
-    let matched = scoredProducts.map((item: any) => item.product);
+    let matched = ranked.map((r) => r.product);
 
     // Filter by location if coordinates are provided.
     //
@@ -2595,6 +2408,8 @@ export const searchProductsInternal = internalQuery({
     return {
       products: activeEnriched,
       totalMatchedCount: activeEnriched.length,
+      // True when no product contained every word, so these are related rather than exact results.
+      relatedOnly,
       // Additive; nothing consumes it yet.
       discovery,
     };

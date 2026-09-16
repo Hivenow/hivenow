@@ -164,7 +164,7 @@ export const Navbar: React.FC = () => {
   }, []);
 
   const searchProductsAction = useAction(api.products.searchProducts);
-  const [searchResults, setSearchResults] = useState<{ products: any[]; totalMatchedCount: number } | null>(null);
+  const [searchResults, setSearchResults] = useState<{ query: string; products: any[]; totalMatchedCount: number } | null>(null);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -187,11 +187,11 @@ export const Navbar: React.FC = () => {
         ...toQueryCoords(latitude, longitude),
       })
         .then((res) => {
-          setSearchResults(res);
+          setSearchResults({ ...res, query: trimmed });
         })
         .catch((err) => {
           console.error("Suggestions failed:", err);
-          setSearchResults({ products: [], totalMatchedCount: 0 });
+          setSearchResults({ query: trimmed, products: [], totalMatchedCount: 0 });
         });
     }, 200);
 
@@ -218,36 +218,21 @@ export const Navbar: React.FC = () => {
     );
   };
 
+  // Built only from what search actually returned, so every suggestion leads to products. A
+  // hardcoded "trending" list used to offer searches like "Salwar Sets" with nothing behind them.
   const suggestions = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return [];
+    const query = searchQuery.trim();
+    // Results arrive after a debounce; ignore ones produced for an earlier query.
+    if (!query || searchResults?.query !== query) return [];
 
-    const trendingKeywords = [
-      "Sarees",
-      "Lehengas",
-      "Kurtis",
-      "Bridal Wear",
-      "Onam Collection",
-      "Salwar Sets",
-      "Party Wear",
-      "Office Wear",
-      "Red Saree",
-      "Black Kurti",
-      "Reception Look",
-      "Engagement Outfit",
-      "Wedding Guest"
-    ];
+    const categoryNames = searchResults.products
+      .map((p: any) => p.categoryName)
+      .filter((name: any) => typeof name === "string" && name && name !== "Uncategorized");
+    const productNames = searchResults.products
+      .map((p: any) => (typeof p.name === "string" ? p.name.trim() : ""))
+      .filter(Boolean);
 
-    const matchedKeywords = trendingKeywords.filter((kw) =>
-      kw.toLowerCase().includes(query)
-    );
-
-    const matchedProductNames = (searchResults?.products || [])
-      .map((p: any) => p.name)
-      .filter((name: string) => name.toLowerCase().includes(query));
-
-    const combined = Array.from(new Set([...matchedKeywords, ...matchedProductNames]));
-    return combined.slice(0, 8);
+    return Array.from(new Set([...categoryNames, ...productNames])).slice(0, 8);
   }, [searchQuery, searchResults]);
 
   const SELLER_PORTAL_URL = process.env.NEXT_PUBLIC_SELLER_PORTAL_URL || "https://seller.hivenow.in";

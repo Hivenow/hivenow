@@ -127,7 +127,7 @@ function SearchContent() {
   }, [searchTerm, q, router]);
 
   const searchProductsAction = useAction(api.products.searchProducts);
-  const [searchResult, setSearchResult] = useState<{ products: any[]; totalMatchedCount: number } | null>(null);
+  const [searchResult, setSearchResult] = useState<{ products: any[]; totalMatchedCount: number; relatedOnly?: boolean } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
   const popularProductsData = useQuery(api.products.getMostLovedProducts, {
@@ -240,6 +240,13 @@ function SearchContent() {
           </div>
         ) : products.length > 0 ? (
           <>
+            {/* Some but not all of the shopper's words matched — say so rather than imply exact results. */}
+            {!isFallback && searchResult?.relatedOnly && (
+              <div className="py-2.5 px-3.5 bg-stone-100 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 font-medium">
+                No exact match for &ldquo;<strong>{q}</strong>&rdquo;. Showing related products:
+              </div>
+            )}
+
             {/* Subtle Fallback Notice if no exact matches */}
             {isFallback && (
               <div className="py-2.5 px-3.5 bg-stone-100 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 font-medium flex items-center justify-between">

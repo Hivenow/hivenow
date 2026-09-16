@@ -87,12 +87,21 @@ for (const group of SYNONYM_GROUPS) {
   for (const word of stemmed) synonymsByWord.set(word, stemmed);
 }
 
-/** Lowercased words, with hyphenated/joined forms also emitted so "co-ord" and "coord" meet. */
+/**
+ * Lowercased, stemmed words. Joined forms are emitted too, so "co-ord" meets "coord" and a lone
+ * letter meets its neighbour: "V Neck", "V-Neck" and "v neck" all produce "vneck".
+ */
 export function wordsOf(text: string): string[] {
   const lower = text.toLowerCase();
   const spaced = lower.split(/[^a-z0-9]+/).filter(Boolean);
-  const joined = lower.split(/[^a-z0-9-]+/).filter((w) => w.includes("-")).map((w) => w.replace(/-/g, ""));
-  return [...spaced, ...joined].map(stem);
+  const hyphenJoined = lower
+    .split(/[^a-z0-9-]+/)
+    .filter((w) => w.includes("-"))
+    .map((w) => w.replace(/-/g, ""));
+  const letterJoined = spaced
+    .map((w, i) => (w.length === 1 && spaced[i + 1] ? w + spaced[i + 1] : ""))
+    .filter(Boolean);
+  return [...spaced, ...hyphenJoined, ...letterJoined].map(stem);
 }
 
 export interface QueryTerm {
