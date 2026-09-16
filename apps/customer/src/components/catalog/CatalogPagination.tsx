@@ -131,7 +131,7 @@ export const CatalogPagination: React.FC<CatalogPaginationProps> = ({
       <p className="text-xs text-hive-text-muted font-medium">
         Showing <span className="font-bold text-hive-dark">{startItem}</span> –{" "}
         <span className="font-bold text-hive-dark">{endItem}</span> of{" "}
-        <span className="font-bold text-hive-dark">{resultCount}</span> boutique designs
+        <span className="font-bold text-hive-dark">{resultCount}</span> designs
       </p>
     </div>
   );

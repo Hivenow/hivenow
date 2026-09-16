@@ -106,7 +106,7 @@ export const CollectionShowcase: React.FC<CollectionShowcaseProps> = ({
                 Curated By
               </span>
               <h2 className="text-xl font-serif font-extrabold text-hive-dark">
-                Featured Boutiques
+                Featured Stores
               </h2>
             </div>
 

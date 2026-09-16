@@ -17,7 +17,7 @@ const SkeletonCard: React.FC<SkeletonCardProps> = ({ delay = 0 }) => (
 
     {/* Content placeholders */}
     <div className="px-1.5 py-3 flex flex-col gap-3">
-      {/* Boutique name */}
+      {/* Store name */}
       <div className="h-2 w-1/3 rounded-full bg-gray-200 relative overflow-hidden">
         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.6s_0.1s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
       </div>

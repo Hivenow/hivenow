@@ -2,20 +2,15 @@
 
 import React, { useState, useMemo } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   MapPin,
-  Clock,
   ShieldCheck,
-  Sparkles,
   Navigation,
   ArrowLeft,
-  ChevronDown,
   Store,
   Truck,
   Star,
-  ExternalLink,
 } from "lucide-react";
 import { CatalogLayout } from "@/components/catalog/CatalogLayout";
 import { ProductCard } from "@/components/product/ProductCard";
@@ -44,18 +39,6 @@ export interface PublicBoutique {
   reviewCount?: number;
 }
 
-export interface RelatedBoutique {
-  _id: string;
-  slug?: string;
-  boutiqueName: string;
-  city?: string;
-  logoUrl?: string;
-  bannerUrl?: string;
-  merchantTier?: string;
-  storeCategory?: string;
-  activeApprovedProductCount?: number;
-}
-
 export interface CategoryInfo {
   _id: string;
   name: string;
@@ -71,29 +54,12 @@ interface BoutiqueStorefrontClientProps {
   boutique: PublicBoutique;
   products: StorefrontProduct[];
   categories: CategoryInfo[];
-  relatedBoutiques: RelatedBoutique[];
 }
-
-const KOCHI_NEIGHBORHOODS = [
-  "Panampilly Nagar",
-  "Marine Drive",
-  "Kakkanad",
-  "Edappally",
-  "Fort Kochi",
-  "Kaloor",
-  "MG Road",
-  "Vyttila",
-  "Palarivattom",
-  "Ravipuram",
-  "Kadavanthra",
-  "Aluva",
-];
 
 export function BoutiqueStorefrontClient({
   boutique,
   products,
   categories,
-  relatedBoutiques,
 }: BoutiqueStorefrontClientProps) {
   const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -115,7 +81,7 @@ export function BoutiqueStorefrontClient({
     return counts;
   }, [products]);
 
-  // Distinct category names present in this boutique's catalog
+  // Distinct category names present in this store's catalog
   const availableCategories = useMemo(() => {
     const list: { key: string; label: string; count: number }[] = [
       { key: "all", label: "All Items", count: products.length },
@@ -162,7 +128,6 @@ export function BoutiqueStorefrontClient({
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
 
   const boutiqueCity = boutique.city || "Kochi";
-  const displayAddress = boutique.address || `${boutiqueCity}, Kerala`;
   const rating = boutique.averageRating ? boutique.averageRating.toFixed(1) : "4.9";
   const reviewCount = boutique.reviewCount || 18;
 
@@ -170,7 +135,7 @@ export function BoutiqueStorefrontClient({
     <CatalogLayout
       breadcrumbs={[
         { label: "Home", href: "/" },
-        { label: "Boutiques", href: "/products" },
+        { label: "Stores", href: "/products" },
         { label: boutique.boutiqueName },
       ]}
     >
@@ -204,10 +169,6 @@ export function BoutiqueStorefrontClient({
 
             {/* Badges on Banner */}
             <div className="absolute top-4 right-4 flex items-center gap-2 flex-wrap justify-end">
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-white/95 text-stone-900 backdrop-blur-md shadow-xs">
-                <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>90-Min Delivery in Kochi</span>
-              </span>
               {boutique.isAcceptingOrders !== false ? (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/90 text-white backdrop-blur-md shadow-xs">
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
@@ -250,7 +211,7 @@ export function BoutiqueStorefrontClient({
                     </h1>
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
                       <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Verified Boutique</span>
+                      <span>Verified Store</span>
                     </span>
                   </div>
 
@@ -268,7 +229,7 @@ export function BoutiqueStorefrontClient({
                     </span>
                     <span className="text-stone-400">·</span>
                     <span className="text-stone-600 font-semibold">
-                      {products.length} {products.length === 1 ? "design" : "curated designs"}
+                      {products.length} {products.length === 1 ? "design" : "designs"}
                     </span>
                   </div>
                 </div>
@@ -276,13 +237,6 @@ export function BoutiqueStorefrontClient({
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2.5 pt-2 sm:pt-0">
-                <a
-                  href="#store-location"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition-colors"
-                >
-                  <Store className="w-3.5 h-3.5 text-stone-500" />
-                  <span>Physical Store</span>
-                </a>
                 <a
                   href={mapsUrl}
                   target="_blank"
@@ -297,45 +251,7 @@ export function BoutiqueStorefrontClient({
           </div>
         </section>
 
-        {/* ── 2. About the Boutique ────────────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-stone-200/80 p-6 sm:p-8 text-left space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-600" />
-            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">
-              About {boutique.boutiqueName}
-            </h2>
-          </div>
-          <p className="text-sm sm:text-base text-stone-700 leading-relaxed max-w-4xl font-normal">
-            {boutique.description ||
-              `${boutique.boutiqueName} is an independent fashion boutique located in Kochi, Kerala. Known for thoughtful curation, bespoke craftsmanship, and contemporary ethnic styles, each garment is stocked directly at their physical showroom and delivered across Kochi in 90 minutes via Hive.`}
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-stone-100">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50/70 border border-stone-100">
-              <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0" />
-              <div className="text-left">
-                <p className="text-xs font-bold text-stone-800">100% Authentic Stock</p>
-                <p className="text-[11px] text-stone-500">Direct from local showroom</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50/70 border border-stone-100">
-              <Clock className="w-5 h-5 text-emerald-600 shrink-0" />
-              <div className="text-left">
-                <p className="text-xs font-bold text-stone-800">90-Minute Dispatch</p>
-                <p className="text-[11px] text-stone-500">Doorstep delivery in Kochi</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-stone-50/70 border border-stone-100">
-              <Store className="w-5 h-5 text-stone-700 shrink-0" />
-              <div className="text-left">
-                <p className="text-xs font-bold text-stone-800">Local Kerala Boutique</p>
-                <p className="text-[11px] text-stone-500">Visit in person or shop online</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 3. Products & Category Filter Section ─────────────────────────── */}
+        {/* ── 2. Products & Category Filter Section ─────────────────────────── */}
         <section className="space-y-6 text-left">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
             <div>
@@ -417,218 +333,6 @@ export function BoutiqueStorefrontClient({
             </div>
           )}
         </section>
-
-        {/* ── 4. Physical Store Location Card ───────────────────────────────── */}
-        <section
-          id="store-location"
-          className="bg-stone-50 rounded-2xl border border-stone-200/90 p-6 sm:p-8 text-left space-y-6"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Store className="w-4 h-4 text-stone-700" />
-                <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                  Showroom & Store Location
-                </h2>
-              </div>
-              <h3 className="text-xl font-serif font-bold text-stone-900">
-                Visit {boutique.boutiqueName} in Kochi
-              </h3>
-            </div>
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl bg-white border border-stone-300 hover:bg-stone-100 text-stone-800 transition-colors self-start shadow-2xs"
-            >
-              <Navigation className="w-3.5 h-3.5 text-amber-700" />
-              <span>Open in Google Maps</span>
-              <ExternalLink className="w-3 h-3 text-stone-400" />
-            </a>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white rounded-xl border border-stone-200 p-5 sm:p-6">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <MapPin className="w-4 h-4 text-stone-500 mt-1 shrink-0" />
-                <div>
-                  <p className="text-xs font-bold text-stone-500 uppercase tracking-wider">Physical Address</p>
-                  <p className="text-sm font-semibold text-stone-900 mt-0.5">{displayAddress}</p>
-                  {boutique.pincode && (
-                    <p className="text-xs text-stone-500 mt-0.5">PIN: {boutique.pincode}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 pt-2">
-                <Clock className="w-4 h-4 text-stone-500 mt-1 shrink-0" />
-                <div>
-                  <p className="text-xs font-bold text-stone-500 uppercase tracking-wider">Showroom Hours</p>
-                  <p className="text-sm font-semibold text-stone-900 mt-0.5">
-                    Monday – Saturday: 10:00 AM – 8:30 PM
-                  </p>
-                  <p className="text-xs text-stone-500 mt-0.5">Sunday: 11:00 AM – 7:00 PM</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-stone-50 rounded-lg p-4 flex flex-col justify-between border border-stone-100">
-              <p className="text-xs text-stone-600 leading-relaxed">
-                Experience the collection in person to touch the fabrics, try on bespoke fits, or order online through Hive to enjoy rapid doorstep delivery in approximately 90 minutes.
-              </p>
-              <div className="pt-3">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                  <Truck className="w-3.5 h-3.5" />
-                  <span>Express courier pickup available at this location</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 5. Delivery Coverage Areas in Kochi ───────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-stone-200/90 p-6 sm:p-8 text-left space-y-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <Truck className="w-4 h-4 text-emerald-600" />
-              <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                Hyperlocal Delivery Coverage
-              </h2>
-            </div>
-            <h3 className="text-lg font-serif font-bold text-stone-900 mt-1">
-              90-Minute Delivery Areas Across Kochi & Ernakulam
-            </h3>
-            <p className="text-xs text-stone-500 mt-1">
-              Hive dispatches orders directly from {boutique.boutiqueName} to your doorstep in these neighborhoods:
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-2">
-            {KOCHI_NEIGHBORHOODS.map((area) => (
-              <span
-                key={area}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-50 border border-stone-200 text-stone-700"
-              >
-                <MapPin className="w-3 h-3 text-stone-400" />
-                <span>{area}</span>
-              </span>
-            ))}
-          </div>
-        </section>
-
-        {/* ── 6. Boutique FAQs (Accordion) ─────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-stone-200/90 p-6 sm:p-8 text-left space-y-4">
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">
-              Frequently Asked Questions
-            </h2>
-            <h3 className="text-xl font-serif font-bold text-stone-900 mt-1">
-              Shopping from {boutique.boutiqueName}
-            </h3>
-          </div>
-
-          <div className="space-y-3 pt-2">
-            <details className="group bg-stone-50/70 border border-stone-200 rounded-xl overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex items-center justify-between cursor-pointer p-4 text-stone-900 font-semibold text-sm hover:bg-stone-100/60 transition-colors">
-                <span>How quickly does Hive deliver from {boutique.boutiqueName}?</span>
-                <ChevronDown className="w-4 h-4 text-stone-500 transition-transform duration-200 group-open:-rotate-180 shrink-0 ml-2" />
-              </summary>
-              <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-stone-600 leading-relaxed border-t border-stone-100">
-                Orders placed on Hive are packed directly by {boutique.boutiqueName}&apos;s staff in Kochi and dispatched via dedicated express couriers. Delivery typically takes approximately 90 minutes anywhere across Kochi and Ernakulam.
-              </div>
-            </details>
-
-            <details className="group bg-stone-50/70 border border-stone-200 rounded-xl overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex items-center justify-between cursor-pointer p-4 text-stone-900 font-semibold text-sm hover:bg-stone-100/60 transition-colors">
-                <span>Are items from {boutique.boutiqueName} authentic?</span>
-                <ChevronDown className="w-4 h-4 text-stone-500 transition-transform duration-200 group-open:-rotate-180 shrink-0 ml-2" />
-              </summary>
-              <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-stone-600 leading-relaxed border-t border-stone-100">
-                Yes, 100% authentic. Hive is the official digital marketplace for local boutiques in Kochi. Every item comes directly from {boutique.boutiqueName}&apos;s physical boutique inventory with original brand tags and packaging.
-              </div>
-            </details>
-
-            <details className="group bg-stone-50/70 border border-stone-200 rounded-xl overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex items-center justify-between cursor-pointer p-4 text-stone-900 font-semibold text-sm hover:bg-stone-100/60 transition-colors">
-                <span>Can I visit {boutique.boutiqueName}&apos;s physical showroom?</span>
-                <ChevronDown className="w-4 h-4 text-stone-500 transition-transform duration-200 group-open:-rotate-180 shrink-0 ml-2" />
-              </summary>
-              <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-stone-600 leading-relaxed border-t border-stone-100">
-                Yes! {boutique.boutiqueName} operates a physical store at {displayAddress}. You can visit during store hours to explore garments in person or order via Hive for immediate delivery.
-              </div>
-            </details>
-
-            <details className="group bg-stone-50/70 border border-stone-200 rounded-xl overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-              <summary className="flex items-center justify-between cursor-pointer p-4 text-stone-900 font-semibold text-sm hover:bg-stone-100/60 transition-colors">
-                <span>What is the return and exchange policy?</span>
-                <ChevronDown className="w-4 h-4 text-stone-500 transition-transform duration-200 group-open:-rotate-180 shrink-0 ml-2" />
-              </summary>
-              <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-stone-600 leading-relaxed border-t border-stone-100">
-                Hive provides hassle-free returns and size exchanges within 2 days of delivery. If an outfit doesn&apos;t fit as expected, you can schedule a doorstep pickup directly through your Hive account.
-              </div>
-            </details>
-          </div>
-        </section>
-
-        {/* ── 7. Related Boutiques in Kochi ─────────────────────────────────── */}
-        {relatedBoutiques.length > 0 && (
-          <section className="text-left space-y-4 pt-2">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                Explore More Local Fashion
-              </h2>
-              <h3 className="text-xl font-serif font-bold text-stone-900 mt-1">
-                Other Boutiques in Kochi
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {relatedBoutiques.map((rb) => {
-                const rbSlug =
-                  rb.slug ||
-                  rb.boutiqueName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-                return (
-                  <Link
-                    key={rb._id}
-                    href={`/shop/${rbSlug}`}
-                    className="group flex items-center gap-3.5 p-4 rounded-2xl bg-white border border-stone-200 hover:border-stone-400 transition-all hover:shadow-sm"
-                  >
-                    <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-stone-200 bg-stone-100 shrink-0">
-                      {rb.logoUrl ? (
-                        <Image
-                          src={rb.logoUrl}
-                          alt={`${rb.boutiqueName} logo`}
-                          fill
-                          sizes="56px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-lg font-serif font-bold text-stone-700">
-                          {rb.boutiqueName.charAt(0)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-0.5 min-w-0 flex-1">
-                      <p className="text-sm font-bold text-stone-900 truncate group-hover:text-amber-900 transition-colors">
-                        {rb.boutiqueName}
-                      </p>
-                      <p className="text-xs text-stone-500 flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
-                        <span className="truncate">{rb.city || "Kochi"}, Kerala</span>
-                      </p>
-                      {typeof rb.activeApprovedProductCount === "number" && (
-                        <p className="text-[11px] font-semibold text-stone-400">
-                          {rb.activeApprovedProductCount} {rb.activeApprovedProductCount === 1 ? "design" : "designs"}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        )}
       </div>
 
       {/* Quick View Modal */}

@@ -9,7 +9,6 @@ import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
 import {
   BoutiqueStorefrontClient,
   PublicBoutique,
-  RelatedBoutique,
   CategoryInfo,
 } from "./BoutiqueStorefrontClient";
 
@@ -40,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 
     const city = boutique.city || "Kochi";
-    const title = `${boutique.boutiqueName} — Boutique in ${city} | Shop Online on Hive`;
+    const title = `${boutique.boutiqueName} — Store in ${city} | Shop Online on Hive`;
     const description =
       boutique.description ||
       `Shop curated fashion from ${boutique.boutiqueName} in ${city}, Kerala. Kurtis, sarees, dresses & accessories delivered to your door in 90 minutes via Hive.`;
@@ -92,7 +91,6 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
   let boutique: any = null;
   let rawProducts: any[] = [];
   let rawCategories: any[] = [];
-  let rawApprovedBoutiques: any[] = [];
 
   try {
     boutique = await client.query(api.boutiques.getBoutiquePublicProfile, { slug });
@@ -108,15 +106,13 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
       );
     }
 
-    const [productsRes, categoriesRes, approvedRes] = await Promise.all([
+    const [productsRes, categoriesRes] = await Promise.all([
       client.query(api.products.getActiveProducts, { boutiqueId: boutique._id }),
       client.query(api.categories.getCategories, { onlyActive: true }),
-      client.query(api.boutiques.getApprovedBoutiques, {}),
     ]);
 
     rawProducts = productsRes || [];
     rawCategories = categoriesRes || [];
-    rawApprovedBoutiques = approvedRes || [];
   } catch (error) {
     console.error("Failed to fetch boutique storefront data:", error);
     return notFound();
@@ -132,20 +128,7 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
       slug: c.slug,
     }));
 
-  const relatedBoutiques: RelatedBoutique[] = rawApprovedBoutiques
-    .filter((b: any) => b._id !== boutique._id)
-    .slice(0, 3)
-    .map((b: any) => ({
-      _id: b._id,
-      slug: b.slug,
-      boutiqueName: b.boutiqueName,
-      city: b.city,
-      logoUrl: b.logoUrl,
-      bannerUrl: b.bannerUrl,
-      merchantTier: b.merchantTier,
-      storeCategory: b.storeCategory,
-      activeApprovedProductCount: b.activeApprovedProductCount,
-    }));
+
 
   const publicBoutique: PublicBoutique = {
     _id: boutique._id,
@@ -292,7 +275,7 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
       <BreadcrumbSchema
         items={[
           { name: "Home", url: "/" },
-          { name: "Boutiques", url: "/products" },
+          { name: "Stores", url: "/products" },
           { name: boutique.boutiqueName, url: `/shop/${slug}` },
         ]}
       />
@@ -301,7 +284,6 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
         boutique={publicBoutique}
         products={products}
         categories={categories}
-        relatedBoutiques={relatedBoutiques}
       />
     </>
   );

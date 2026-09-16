@@ -102,10 +102,10 @@ export function ProductDetailPageClient({ product: rawProduct }: ProductDetailPa
                 </div>
                 <div className="space-y-2">
                   <h1 className="font-serif text-2xl md:text-3xl font-black text-hive-dark">
-                    Boutique on Vacation
+                    Store on Vacation
                   </h1>
                   <p className="text-sm text-hive-text-muted leading-relaxed font-medium">
-                    This boutique is taking a short break {reopenText}.<br/>
+                    This store is taking a short break {reopenText}.<br/>
                     Save to wishlist and we&apos;ll remind you when they&apos;re back.
                   </p>
                 </div>

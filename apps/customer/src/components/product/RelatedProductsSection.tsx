@@ -50,7 +50,7 @@ function mapDbProduct(p: any): ProductCardData & { sizes: string[]; stockBySize:
     id: p._id,
     slug: p.slug,
     name: p.name,
-    boutiqueName: p.boutiqueName || "Unknown Boutique",
+    boutiqueName: p.boutiqueName || "Unknown Store",
     boutiqueId: p.boutiqueId,
     boutique: p.boutique,
     imageUrl: p.imageUrl || (p.imageUrls?.[0]) || "",

@@ -24,7 +24,7 @@ export const CollectionStats: React.FC<CollectionStatsProps> = ({ details }) => 
     {
       icon: Store,
       value: `${stats.boutiqueCount}`,
-      label: "Boutiques",
+      label: "Stores",
     },
     {
       icon: Truck,

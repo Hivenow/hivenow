@@ -24,7 +24,7 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = ({
   isVerified = true,
 }) => {
   const headerTitle = title || details?.title || "Curated Collection";
-  const headerDesc = description || details?.description || "Hand-picked fashion edits from verified local boutiques.";
+  const headerDesc = description || details?.description || "Hand-picked fashion edits from verified local stores.";
   const headerCount = productCount ?? resultCount ?? details?.productCount ?? 0;
   const headerAccent = accentColor || details?.accentColor || "#1A1200";
   const bgCover = coverImage || details?.imageUrl;
@@ -44,7 +44,7 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = ({
           />
           <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-hive-dark bg-hive-dark/5 border border-hive-dark/15 px-2.5 py-0.5 rounded-full flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-hive-dark" />
-            <span>BOUTIQUE CURATED EDIT</span>
+            <span>CURATED EDIT</span>
           </span>
           {isVerified && (
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1">

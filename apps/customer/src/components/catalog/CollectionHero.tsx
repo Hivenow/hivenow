@@ -55,7 +55,7 @@ export const CollectionHero: React.FC<CollectionHeroProps> = ({ details }) => {
                 className="w-1.5 h-1.5 rounded-full"
                 style={{ background: details.accentColor }}
               />
-              Boutique Collection
+              Curated Collection
             </span>
           </div>
 
@@ -119,7 +119,7 @@ export const CollectionHero: React.FC<CollectionHeroProps> = ({ details }) => {
             {details.featuredBoutiques.length > 0 && (
               <div className="hidden lg:flex flex-col gap-3 min-w-[220px]">
                 <span className="text-[10px] font-extrabold text-white/50 uppercase tracking-widest">
-                  Featured Boutiques
+                  Featured Stores
                 </span>
                 <div className="flex flex-col gap-2">
                   {details.featuredBoutiques.slice(0, 3).map((b) => (

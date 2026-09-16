@@ -361,7 +361,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
 
   const handleAddToCart = () => {
     if (isStoreOffline) {
-      toast.error("This boutique is currently closed or not accepting orders.");
+      toast.error("This store is currently closed or not accepting orders.");
       return;
     }
     if (!selectedSize) {
@@ -633,7 +633,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
                   <ShoppingBag className="w-4 h-4" />
                   <span>
                     {isStoreOffline
-                      ? "Boutique Closed"
+                      ? "Store Closed"
                       : (!isLocationServiceable && latitude !== null)
                       ? "Unavailable in your area"
                       : isOutOfStock
@@ -649,7 +649,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
             </button>
             {isPreorderMode && (
               <p className="hidden md:block mt-2 text-[10px] text-stone-500 text-center font-medium leading-normal max-w-[280px] mx-auto">
-                ⓘ Boutique is currently closed. Order will be processed when they open at{" "}
+                ⓘ Store is currently closed. Order will be processed when they open at{" "}
                 {(boutiqueStatus as any).openingTime} on{" "}
                 {boutiqueStatus.type === "CLOSED_TODAY"
                   ? "tomorrow"
