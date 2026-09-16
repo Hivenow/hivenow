@@ -274,7 +274,9 @@ export const getAdminProducts = query({
  * Returns overall clamped Catalog Health Score, Revenue at Risk (paise), and Failing Quality Gate Count.
  */
 export const getCatalogDashboardMetricsAdmin = query({
-  args: {},
+  args: {
+    nowBucket: v.optional(v.number()),
+  },
   handler: async (ctx) => {
     await requireRole(ctx, "admin");
 
