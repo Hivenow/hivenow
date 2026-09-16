@@ -863,6 +863,27 @@ async function resolveBoutiqueMerchantTier(ctx: any, b: any): Promise<"Bronze" |
   return "Bronze";
 }
 
+/**
+ * The boutique's stored merchant tier, defaulting to Bronze.
+ *
+ * This is the same rule products.ts:getBoutiqueMerchantTier applies, and the
+ * one every consumer that matters already uses: product approval
+ * (products.ts:createProduct, merchantCatalog) and the admin tier displays all
+ * read the stored field directly. getApprovedBoutiques previously computed a
+ * tier instead, reading every order and claim for each boutique without a
+ * stored value -- 11 of 15 in production -- which made a query mounted in the
+ * customer root provider read ~113 documents per execution to produce a label
+ * no customer surface renders.
+ *
+ * resolveBoutiqueMerchantTier is deliberately left in place for
+ * getBoutiquePublicProfile, which is a single-boutique read.
+ */
+export function storedMerchantTier(
+  boutique: { merchantTier?: "Bronze" | "Silver" | "Gold" | "Elite" }
+): "Bronze" | "Silver" | "Gold" | "Elite" {
+  return boutique.merchantTier ?? "Bronze";
+}
+
 export const getApprovedBoutiques = query({
   args: {},
   handler: async (ctx) => {
@@ -881,7 +902,7 @@ export const getApprovedBoutiques = query({
         filtered.map(async (b) => {
           let logoUrl = b.logoUrl ? getPublicUrl(b.logoUrl, "thumbnail") : undefined;
           let bannerUrl = b.bannerUrl ? getPublicUrl(b.bannerUrl, "original") : undefined;
-          const merchantTier = await resolveBoutiqueMerchantTier(ctx, b);
+          const merchantTier = storedMerchantTier(b);
 
           // Use pre-computed count instead of querying all products per boutique (N+1 elimination)
           const activeApprovedProductCount = b.activeApprovedProductCount ?? 0;
