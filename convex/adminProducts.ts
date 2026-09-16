@@ -3,7 +3,7 @@
 
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./lib/auth";
 import { updateBoutiqueProductCount } from "./boutiques";
@@ -948,16 +948,26 @@ export const replaceProductImageAdmin = mutation({
   handler: async (ctx, args) => {
     const admin = await requireRole(ctx, "admin");
     const product = await ctx.db.get(args.productId);
-    if (!product) throw new Error("Product not found");
+    if (!product) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Product not found" });
+    }
 
     const images = [...(product.images || [])];
     if (args.imageIndex < 0 || args.imageIndex >= images.length) {
-      throw new Error(`Invalid image index ${args.imageIndex}. Product has ${images.length} images.`);
+      throw new ConvexError({
+        code: "INVALID_INDEX",
+        message: `Invalid image index ${args.imageIndex}. Product has ${images.length} images.`,
+      });
     }
 
     // Capture old image for potential R2 cleanup
     const oldImage = images[args.imageIndex];
-    const oldObjectKeys = extractR2ObjectKeys([oldImage]);
+    let oldObjectKeys: string[] = [];
+    try {
+      oldObjectKeys = extractR2ObjectKeys([oldImage]);
+    } catch {
+      // Old image might be a plain URL string — no R2 key to extract
+    }
 
     // Replace the image at the specified index
     images[args.imageIndex] = args.newImage as any;
@@ -968,29 +978,38 @@ export const replaceProductImageAdmin = mutation({
       updatedAt: now,
     });
 
-    // Schedule R2 cleanup for the old image
+    // Schedule R2 cleanup for the old image (best-effort, don't fail the mutation)
     if (oldObjectKeys.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
-        objectKeys: oldObjectKeys,
-        actorId: admin._id,
-      });
+      try {
+        await ctx.scheduler.runAfter(0, internal.media.api.deleteR2Objects, {
+          objectKeys: oldObjectKeys,
+          actorId: admin._id,
+        });
+      } catch (e) {
+        console.error("[replaceProductImageAdmin] R2 cleanup scheduling failed:", e);
+      }
     }
 
     // Audit log
-    await ctx.db.insert("auditLogs", {
-      actorId: admin._id,
-      actorRole: "admin",
-      action: "product.image_replaced_admin",
-      entityType: "products",
-      entityId: args.productId,
-      metadata: JSON.stringify({
-        productName: product.name,
-        imageIndex: args.imageIndex,
-        oldObjectKeys,
-        newImageType: typeof args.newImage === "string" ? "url" : "ImageAsset",
-      }),
-      createdAt: now,
-    });
+    try {
+      await ctx.db.insert("auditLogs", {
+        actorId: admin._id,
+        actorRole: "admin",
+        action: "product.image_replaced_admin",
+        entityType: "products",
+        entityId: args.productId,
+        metadata: JSON.stringify({
+          productName: product.name,
+          imageIndex: args.imageIndex,
+          oldObjectKeys,
+          newImageType: typeof args.newImage === "string" ? "url" : "ImageAsset",
+        }),
+        createdAt: now,
+      });
+    } catch (e) {
+      // Don't fail the mutation just because audit logging failed
+      console.error("[replaceProductImageAdmin] Audit log insert failed:", e);
+    }
 
     return { productId: args.productId, imageIndex: args.imageIndex };
   },
