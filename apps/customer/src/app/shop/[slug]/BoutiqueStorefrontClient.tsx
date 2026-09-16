@@ -4,7 +4,6 @@ import React, { useState, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
-  MapPin,
   ShieldCheck,
   ArrowLeft,
   Star,
@@ -119,7 +118,6 @@ export function BoutiqueStorefrontClient({
     return list;
   }, [products, selectedCategory, sortOption]);
 
-  const boutiqueCity = boutique.city || "Kochi";
   const rating = boutique.averageRating ? boutique.averageRating.toFixed(1) : "4.9";
   const reviewCount = boutique.reviewCount || 18;
 
@@ -172,11 +170,6 @@ export function BoutiqueStorefrontClient({
               </span>
             </div>
             <div className="flex items-center gap-2.5 text-xs text-stone-500 font-medium flex-wrap">
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-stone-400" />
-                <span>{boutique.address ? boutique.address.split(",")[0] : boutiqueCity}</span>
-              </span>
-              <span className="text-stone-300">·</span>
               <span className="flex items-center gap-1 text-amber-700 font-bold">
                 <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
                 <span>{rating}</span>
