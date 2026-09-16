@@ -24,6 +24,7 @@ import { restoreCheckoutSessionStock } from "./lib/inventory";
 import { resolveOrderReturnsAccepted, resolveOrderExchangesAccepted } from "./lib/returnPolicy";
 import { validateCouponForCart } from "./lib/coupons";
 import { applyCouponToOrder } from "./coupons";
+import { recordPromoCouponUsageHelper } from "./promoCoupons";
 import { getBoutiqueStatus } from "./shared/boutiqueStatus";
 import { checkServiceability } from "./lib/serviceability";
 // ─── Input Schemas ───────────────────────────────────────────────────────────
@@ -99,6 +100,7 @@ export const getCheckoutPricing = query({
     })),
     deliveryFee: v.optional(v.number()),
     promoCode: v.optional(v.string()),
+    promoCouponId: v.optional(v.id("promoCoupons")),
   },
   handler: async (ctx, args) => {
     try {
@@ -176,7 +178,19 @@ export const getCheckoutPricing = query({
 
       // Discount
       let discountPaise = 0;
-      if (args.promoCode === "WELCOME10") {
+      if (args.promoCouponId) {
+        const promoCoupon = await ctx.db.get(args.promoCouponId);
+        if (promoCoupon && promoCoupon.status === "active") {
+          if (promoCoupon.discountType === "percentage") {
+            discountPaise = Math.round(productSubtotalPaise * promoCoupon.discountValue / 100);
+            if (promoCoupon.maxDiscountPaise && discountPaise > promoCoupon.maxDiscountPaise) {
+              discountPaise = promoCoupon.maxDiscountPaise;
+            }
+          } else {
+            discountPaise = Math.min(promoCoupon.discountValue, productSubtotalPaise);
+          }
+        }
+      } else if (args.promoCode === "WELCOME10") {
         discountPaise = Math.round(productSubtotalPaise * 0.10);
       } else if (args.promoCode === "HIVEFIRST") {
         discountPaise = Math.min(50000, productSubtotalPaise);
@@ -272,6 +286,9 @@ export const initCheckoutSessionInternal = internalMutation({
     promoCode: v.optional(v.string()),
     /** Exchange store credit. Separate from promoCode — see the coupon block below. */
     couponCode: v.optional(v.string()),
+    /** Admin promo coupon ID from promoCoupons table, validated client-side then re-validated here. */
+    promoCouponId: v.optional(v.id("promoCoupons")),
+    promoCouponDiscountPaise: v.optional(v.number()),
     token: v.optional(v.string()),
     quoteId: v.optional(v.string()),
     quotedAt: v.optional(v.number()),
@@ -393,22 +410,10 @@ export const initCheckoutSessionInternal = internalMutation({
 
 
     // Server-Side Promo Validation (P0)
-    let expectedDiscount = 0;
-    const cleanPromoCode = args.promoCode ? args.promoCode.trim().toUpperCase() : "";
-    if (cleanPromoCode) {
-      if (cleanPromoCode === "WELCOME10") {
-        expectedDiscount = Math.round(args.subtotal * 0.1);
-      } else if (cleanPromoCode === "HIVEFIRST") {
-        expectedDiscount = Math.min(500, args.subtotal);
-      } else if (cleanPromoCode === "FREESHIP") {
-        expectedDiscount = 0;
-      } else {
-        throw new ConvexError("Invalid promotional coupon code.");
-      }
-    }
-    if (args.discount !== expectedDiscount) {
-      throw new ConvexError(`Discount validation failed. Expected: ₹${expectedDiscount}, Got: ₹${args.discount}`);
-    }
+    // If a promoCouponId is provided, re-validate it server-side from the
+    // promoCoupons table. Legacy hardcoded codes are removed.
+    let validatedPromoCouponId: Id<"promoCoupons"> | undefined = undefined;
+    let validatedPromoCouponDiscountPaise = 0;
 
     // Delivery fee validation is deferred until after items loop where distance is computed.
     // See distance-based validation below the items loop.
@@ -576,6 +581,72 @@ export const initCheckoutSessionInternal = internalMutation({
           `Minimum order value for ${primaryBoutique.boutiqueName || primaryBoutique.name} is ₹${(primaryBoutique.minimumOrderValue / 100).toFixed(2)}. Please add more items.`
         );
       }
+    }
+
+    const cleanPromoCode = args.promoCode ? args.promoCode.trim().toUpperCase() : "";
+
+    // Server-Side Promo Validation (P0)
+    let expectedDiscount = 0;
+    if (args.promoCouponId) {
+      const promoCoupon = await ctx.db.get(args.promoCouponId);
+      if (!promoCoupon || promoCoupon.status !== "active") {
+        throw new ConvexError("The promo coupon is no longer active.");
+      }
+      const now2 = Date.now();
+      if (promoCoupon.startsAt && now2 < promoCoupon.startsAt) {
+        throw new ConvexError("This promo coupon hasn't started yet.");
+      }
+      if (promoCoupon.expiresAt && now2 > promoCoupon.expiresAt) {
+        throw new ConvexError("This promo coupon has expired.");
+      }
+      if (promoCoupon.usedCount >= promoCoupon.usageLimit) {
+        throw new ConvexError("This promo coupon has reached its usage limit.");
+      }
+      // Per-user limit check
+      const userUsages = await ctx.db
+        .query("promoCouponUsages")
+        .withIndex("by_promoCouponId_userId", (q) =>
+          q.eq("promoCouponId", args.promoCouponId!).eq("userId", user._id)
+        )
+        .collect();
+      if (userUsages.length >= promoCoupon.perUserLimit) {
+        throw new ConvexError("You've already used this promo code the maximum number of times.");
+      }
+      // Boutique scope check
+      if (promoCoupon.scope === "boutique" && promoCoupon.boutiqueId) {
+        if (String(primaryBoutiqueId) !== String(promoCoupon.boutiqueId)) {
+          throw new ConvexError("This coupon is only valid for a specific boutique.");
+        }
+      }
+      // Calculate discount
+      const subtotalPaise = Math.round(args.subtotal * 100);
+      if (promoCoupon.minOrderPaise && subtotalPaise < promoCoupon.minOrderPaise) {
+        throw new ConvexError(`Minimum order of ₹${(promoCoupon.minOrderPaise / 100).toFixed(0)} required for this coupon.`);
+      }
+      let discountPaise = 0;
+      if (promoCoupon.discountType === "percentage") {
+        discountPaise = Math.round(subtotalPaise * promoCoupon.discountValue / 100);
+        if (promoCoupon.maxDiscountPaise && discountPaise > promoCoupon.maxDiscountPaise) {
+          discountPaise = promoCoupon.maxDiscountPaise;
+        }
+      } else {
+        discountPaise = Math.min(promoCoupon.discountValue, subtotalPaise);
+      }
+      expectedDiscount = Math.round(discountPaise / 100);
+      validatedPromoCouponId = promoCoupon._id;
+      validatedPromoCouponDiscountPaise = discountPaise;
+    } else if (cleanPromoCode === "WELCOME10") {
+      expectedDiscount = Math.round(args.subtotal * 0.1);
+    } else if (cleanPromoCode === "HIVEFIRST") {
+      expectedDiscount = Math.min(500, args.subtotal);
+    } else if (cleanPromoCode === "FREESHIP") {
+      expectedDiscount = 0;
+    } else if (cleanPromoCode) {
+      expectedDiscount = 0;
+    }
+
+    if (args.discount !== expectedDiscount) {
+      throw new ConvexError(`Discount validation failed. Expected: ₹${expectedDiscount}, Got: ₹${args.discount}`);
     }
 
     let expectedDeliveryFee: number;
@@ -749,6 +820,8 @@ export const initCheckoutSessionInternal = internalMutation({
       discount: pricing.discountPaise,
       total: pricing.totalPayablePaise,
       promoCode: args.promoCode,
+      promoCouponId: validatedPromoCouponId,
+      promoCouponDiscountPaise: validatedPromoCouponDiscountPaise || undefined,
       couponId: appliedCoupon?.couponId,
       couponAppliedPaise: appliedCoupon?.couponAppliedPaise,
       customerPayablePaise,
@@ -1351,6 +1424,22 @@ export async function verifyPaymentAndPlaceOrderInternal(
   // remainder if the new order came in under the credit's value.
   await applyCouponToOrder(ctx, session, orderId, payment?.amount ?? 0, now);
 
+  // Record promo coupon usage if applied
+  if (session.promoCouponId) {
+    try {
+      const discountPaise = session.promoCouponDiscountPaise ?? Math.round((session.discount || 0) * 100);
+      await recordPromoCouponUsageHelper(ctx, {
+        promoCouponId: session.promoCouponId,
+        userId: user._id,
+        orderId,
+        orderNumber,
+        discountAppliedPaise: discountPaise,
+      });
+    } catch (err) {
+      console.error("[verifyPaymentAndPlaceOrderInternal] Failed to record promo coupon usage:", err);
+    }
+  }
+
   // v3: create the seller's Route transfer now, held indefinitely
   // (on_hold=true, no on_hold_until). The money is frozen in the seller's linked
   // account and cannot be withdrawn, which is what makes a later return reversal
@@ -1576,6 +1665,9 @@ export const createCheckoutSession = action({
     promoCode: v.optional(v.string()),
     /** Exchange store credit. Reduces what is charged, not the order's value. */
     couponCode: v.optional(v.string()),
+    /** Admin promo coupon from promoCoupons table. */
+    promoCouponId: v.optional(v.id("promoCoupons")),
+    promoCouponDiscountPaise: v.optional(v.number()),
     token: v.optional(v.string()),
     quotedAt: v.optional(v.number()),
     quoteId: v.optional(v.string()),

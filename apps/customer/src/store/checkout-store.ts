@@ -9,13 +9,17 @@ export interface CheckoutState {
   selectedSlotWindow: string | null;
   appliedPromo: string | null;
   discountAmount: number;
+  /** Convex ID of the promo coupon applied (from promoCoupons table) */
+  promoCouponId: string | null;
+  /** Discount amount in paise for the applied promo coupon */
+  promoCouponDiscountPaise: number;
   deliveryInstructions: string;
   selectedPaymentMethod: string | null;
   checkoutItems: CartItem[];
   /** Convex address _id stored as string — persists across checkout steps */
   selectedAddressId: string | null;
   setDeliverySelection: (date: string, slot: string, slotWindow: string) => void;
-  setAppliedPromo: (promo: string | null, discount: number) => void;
+  setAppliedPromo: (promo: string | null, discount: number, promoCouponId?: string | null, promoCouponDiscountPaise?: number) => void;
   setDeliveryInstructions: (instructions: string) => void;
   setSelectedPaymentMethod: (method: string | null) => void;
   setCheckoutItems: (items: CartItem[]) => void;
@@ -32,6 +36,8 @@ export const useCheckoutStore = create<CheckoutState>()(
       selectedSlotWindow: null,
       appliedPromo: null,
       discountAmount: 0,
+      promoCouponId: null,
+      promoCouponDiscountPaise: 0,
       deliveryInstructions: "",
       selectedPaymentMethod: null,
       checkoutItems: [],
@@ -39,8 +45,13 @@ export const useCheckoutStore = create<CheckoutState>()(
       setDeliverySelection: (date, slot, slotWindow) => {
         set({ selectedDate: date, selectedSlot: slot, selectedSlotWindow: slotWindow });
       },
-      setAppliedPromo: (promo, discount) => {
-        set({ appliedPromo: promo, discountAmount: discount });
+      setAppliedPromo: (promo, discount, promoCouponId, promoCouponDiscountPaise) => {
+        set({
+          appliedPromo: promo,
+          discountAmount: discount,
+          promoCouponId: promoCouponId ?? null,
+          promoCouponDiscountPaise: promoCouponDiscountPaise ?? 0,
+        });
       },
       setDeliveryInstructions: (instructions) => {
         set({ deliveryInstructions: instructions });
@@ -64,6 +75,8 @@ export const useCheckoutStore = create<CheckoutState>()(
           selectedSlotWindow: null,
           appliedPromo: null,
           discountAmount: 0,
+          promoCouponId: null,
+          promoCouponDiscountPaise: 0,
           deliveryInstructions: "",
           selectedPaymentMethod: null,
           checkoutItems: [] as CartItem[],

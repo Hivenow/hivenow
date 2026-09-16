@@ -29,6 +29,7 @@ import { getEffectiveCheckoutItems } from "@/lib/getEffectiveCheckoutItems";
 import { useSessionStore } from "@/context/SessionContext";
 import { CustomerPriceBreakdown } from "@/components/checkout/CustomerPriceBreakdown";
 import { SwipeToPayButton } from "@/components/checkout/SwipeToPayButton";
+import { PromoCouponCelebration } from "@/components/checkout/PromoCouponCelebration";
 import { Id } from "../../../../../../convex/_generated/dataModel";
 import { formatRupees, toast } from "@hive/utils";
 import { getCustomerErrorMessage, getCustomerErrorCode } from "@/lib/customerErrors";
@@ -89,6 +90,8 @@ export default function OrderReviewPage() {
   const selectedDate = useCheckoutStore((state) => state.selectedDate);
   const selectedSlot = useCheckoutStore((state) => state.selectedSlot);
   const appliedPromo = useCheckoutStore((state) => state.appliedPromo);
+  const promoCouponId = useCheckoutStore((state) => state.promoCouponId);
+  const promoCouponDiscountPaise = useCheckoutStore((state) => state.promoCouponDiscountPaise);
   const rawDiscountAmount = useCheckoutStore((state) => state.discountAmount);
   const deliveryInstructions = useCheckoutStore((state) => state.deliveryInstructions);
   const checkoutItems = useCheckoutStore((state) => state.checkoutItems);
@@ -166,6 +169,8 @@ export default function OrderReviewPage() {
   const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoSuccessMsg, setPromoSuccessMsg] = useState<string | null>(null);
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<{ code: string; savingsRupees: number } | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [scriptLoadError, setScriptLoadError] = useState(false);
@@ -231,13 +236,15 @@ export default function OrderReviewPage() {
           items: itemsForPricing,
           deliveryFee: rawDeliveryFee,
           promoCode: appliedPromo || undefined,
+          promoCouponId: promoCouponId ? (promoCouponId as Id<"promoCoupons">) : undefined,
         }
       : "skip"
   );
 
   const subtotal = backendPricing?.subtotalRupees ?? rawSubtotal;
   const deliveryFee = backendPricing?.deliveryFeeRupees ?? (rawSubtotal >= 10000 ? 0 : 99);
-  const discountAmount = backendPricing?.discountRupees ?? (appliedPromo === "WELCOME10" ? Math.round(rawSubtotal * 0.10) : appliedPromo === "HIVE50" ? Math.min(rawSubtotal, 50) : 0);
+  // Promo coupon discount from checkout store (server-validated), or backend pricing
+  const discountAmount = backendPricing?.discountRupees || (promoCouponDiscountPaise > 0 ? Math.round(promoCouponDiscountPaise / 100) : 0);
   // v2: separate platform charges
   const handlingCharge = backendPricing?.handlingChargeRupees ?? 0;
   const platformFee = backendPricing?.platformFeeRupees ?? 0;
@@ -355,28 +362,40 @@ export default function OrderReviewPage() {
       return;
     }
 
-    if (code === "WELCOME10") {
-      const discount = Math.round(subtotal * 0.1);
-      setAppliedPromo("WELCOME10", discount);
-      setPromoSuccessMsg("WELCOME10 applied: 10% off discount saved.");
+    // Server-validate promo coupons from the promoCoupons table
+    setPromoValidating(true);
+    try {
+      const boutiqueIds = Array.from(
+        new Set(items.map((i: any) => i.boutiqueId).filter(Boolean))
+      );
+      const result: any = await convex.query(api.promoCoupons.validatePromoCode, {
+        code,
+        boutiqueIds,
+        cartTotalPaise: Math.round(subtotal * 100),
+        token: token || undefined,
+      });
+
+      if (!result?.valid) {
+        setPromoError(result?.message || "That coupon code isn't valid.");
+        return;
+      }
+
+      const discountRupees = Math.round(result.discountPaise / 100);
+      setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
+      setPromoSuccessMsg(result.message);
       setPromoInput("");
-    } else if (code === "HIVEFIRST") {
-      const discount = Math.min(50000, subtotal);
-      setAppliedPromo("HIVEFIRST", discount);
-      setPromoSuccessMsg("HIVEFIRST applied: Flat ₹500 discount saved.");
-      setPromoInput("");
-    } else if (code === "FREESHIP") {
-      setAppliedPromo("FREESHIP", 0);
-      setPromoSuccessMsg("FREESHIP applied: Free shipping activated.");
-      setPromoInput("");
-    } else {
-      setPromoError("Invalid coupon code.");
+      // Show celebration popup
+      setCelebrationData({ code, savingsRupees: discountRupees });
+    } catch (err: any) {
+      setPromoError(err?.message || "Couldn't validate that code. Try again.");
+    } finally {
+      setPromoValidating(false);
     }
   };
 
   const handleRemovePromo = () => {
     setAppliedCoupon(null);
-    setAppliedPromo(null, 0);
+    setAppliedPromo(null, 0, null, 0);
     setPromoSuccessMsg(null);
     setPromoError(null);
   };
@@ -461,6 +480,8 @@ export default function OrderReviewPage() {
         discount: discountAmount,
         total: total,
         promoCode: appliedPromo || undefined,
+        promoCouponId: promoCouponId ? (promoCouponId as Id<"promoCoupons">) : undefined,
+        promoCouponDiscountPaise: promoCouponDiscountPaise || undefined,
         couponCode: appliedCoupon?.code,
         token: token || undefined,
         quoteId,
@@ -1151,6 +1172,15 @@ export default function OrderReviewPage() {
           />
         </div>
       </div>
+
+      {/* Promo Coupon Celebration Popup */}
+      {celebrationData && (
+        <PromoCouponCelebration
+          code={celebrationData.code}
+          savingsRupees={celebrationData.savingsRupees}
+          onDismiss={() => setCelebrationData(null)}
+        />
+      )}
     </div>
   );
 }

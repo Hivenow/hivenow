@@ -7,7 +7,7 @@ import { EmptyCartState } from "@/components/cart/EmptyCartState";
 import { ArrowRight, Ticket, Check, AlertCircle, Sparkles, Loader2, X, Zap } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { CartItemComponent } from "@/components/cart/CartItem";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { useSessionStore } from "@/context/SessionContext";
 import { formatRupees } from "@hive/utils";
@@ -15,6 +15,7 @@ import { useConvexMutation } from "@/hooks/useConvexMutation";
 import { useCheckoutStore } from "@/store/checkout-store";
 import { Modal } from "@hive/ui";
 import { FirebaseAuthCard } from "@/components/auth/FirebaseAuthCard";
+import { PromoCouponCelebration } from "@/components/checkout/PromoCouponCelebration";
 
 export default function CartPage() {
   const router = useRouter();
@@ -108,6 +109,9 @@ export default function CartPage() {
   const setAppliedPromo = useCheckoutStore((state) => state.setAppliedPromo);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoSuccessMsg, setPromoSuccessMsg] = useState<string | null>(null);
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<{ code: string; savingsRupees: number } | null>(null);
+  const convex = useConvex();
 
   // Hydration delay protection
   useEffect(() => {
@@ -121,22 +125,15 @@ export default function CartPage() {
   const itemsCount = getCartCount();
   const subtotal = getCartTotal();
 
-  // Promo Code calculations
-  let discountAmount = 0;
-  let deliveryFee = subtotal >= 10000 ? 0 : 99; // in rupees
+  // Promo Code calculations — now server-driven via checkout store
+  const promoCouponDiscountPaise = useCheckoutStore.getState().promoCouponDiscountPaise;
+  let discountAmount = promoCouponDiscountPaise > 0 ? Math.round(promoCouponDiscountPaise / 100) : 0;
+  let deliveryFee = subtotal >= 10000 ? 0 : 99;
 
-  if (activePromo === "WELCOME10") {
-    discountAmount = Math.round(subtotal * 0.1); // 10% off items subtotal
-  } else if (activePromo === "HIVEFIRST") {
-    discountAmount = Math.min(500, subtotal); // Flat ₹500 off
-  } else if (activePromo === "FREESHIP") {
-    deliveryFee = 0; // Waive delivery
-  }
-
-  const taxAmount = 0; // Tax is estimated at ₹0 for now
+  const taxAmount = 0;
   const total = Math.max(0, subtotal - discountAmount + deliveryFee + taxAmount);
 
-  const handleApplyPromo = (e: React.FormEvent) => {
+  const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     setPromoError(null);
     setPromoSuccessMsg(null);
@@ -144,27 +141,39 @@ export default function CartPage() {
 
     if (!code) return;
 
-    if (code === "WELCOME10") {
-      const discount = Math.round(subtotal * 0.1);
-      setAppliedPromo("WELCOME10", discount);
-      setPromoSuccessMsg("WELCOME10 applied successfully! 10% off discount saved.");
+    // Server-validate against the promoCoupons table
+    setPromoValidating(true);
+    try {
+      const boutiqueIds = Array.from(
+        new Set(items.map((i: any) => i.boutiqueId).filter(Boolean))
+      );
+      const result: any = await convex.query(api.promoCoupons.validatePromoCode, {
+        code,
+        boutiqueIds,
+        cartTotalPaise: Math.round(subtotal * 100),
+        token: token || undefined,
+      });
+
+      if (!result?.valid) {
+        setPromoError(result?.message || "That coupon code isn't valid.");
+        return;
+      }
+
+      const discountRupees = Math.round(result.discountPaise / 100);
+      setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
+      setPromoSuccessMsg(result.message);
       setPromoInput("");
-    } else if (code === "HIVEFIRST") {
-      const discount = Math.min(500, subtotal);
-      setAppliedPromo("HIVEFIRST", discount);
-      setPromoSuccessMsg("HIVEFIRST applied successfully! Flat ₹500 discount saved.");
-      setPromoInput("");
-    } else if (code === "FREESHIP") {
-      setAppliedPromo("FREESHIP", 0);
-      setPromoSuccessMsg("FREESHIP applied successfully! Free boutique shipping enabled.");
-      setPromoInput("");
-    } else {
-      setPromoError("Invalid coupon code. Try WELCOME10, HIVEFIRST, or FREESHIP.");
+      // Show celebration popup
+      setCelebrationData({ code, savingsRupees: discountRupees });
+    } catch (err: any) {
+      setPromoError(err?.message || "Couldn't validate that code. Try again.");
+    } finally {
+      setPromoValidating(false);
     }
   };
 
   const handleRemovePromo = () => {
-    setAppliedPromo(null, 0);
+    setAppliedPromo(null, 0, null, 0);
     setPromoSuccessMsg(null);
     setPromoError(null);
   };
@@ -288,11 +297,9 @@ export default function CartPage() {
                       <div className="flex flex-col text-left">
                         <span className="text-[10px] font-extrabold text-green-800 flex items-center gap-1 uppercase">
                           <Check className="w-3 h-3 stroke-[2.5]" />
-                          {activePromo}
-                        </span>
-                        {activePromo === "WELCOME10" && <span className="text-[8px] text-green-700 font-medium">10% Off Applied</span>}
-                        {activePromo === "HIVEFIRST" && <span className="text-[8px] text-green-700 font-medium">₹500 Off Applied</span>}
-                        {activePromo === "FREESHIP" && <span className="text-[8px] text-green-700 font-medium">Free Delivery Applied</span>}
+                        {activePromo}
+                      </span>
+                      <span className="text-[8px] text-green-700 font-medium">Discount Applied</span>
                       </div>
                       <button
                         type="button"
@@ -398,6 +405,15 @@ export default function CartPage() {
           </button>
         </div>
       </Modal>
+
+      {/* Promo Coupon Celebration Popup */}
+      {celebrationData && (
+        <PromoCouponCelebration
+          code={celebrationData.code}
+          savingsRupees={celebrationData.savingsRupees}
+          onDismiss={() => setCelebrationData(null)}
+        />
+      )}
     </div>
   );
 }

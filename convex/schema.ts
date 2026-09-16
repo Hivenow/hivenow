@@ -1326,6 +1326,9 @@ export default defineSchema({
     // `customerPayablePaise` is what actually goes to Razorpay.
     couponId:             v.optional(v.id("coupons")),
     couponAppliedPaise:   v.optional(v.number()),
+    // Admin promo coupon applied to this checkout (from promoCoupons table).
+    promoCouponId:        v.optional(v.id("promoCoupons")),
+    promoCouponDiscountPaise: v.optional(v.number()),
     customerPayablePaise: v.optional(v.number()),
     razorpayOrderId: v.string(),
     status:          v.union(
@@ -2864,5 +2867,57 @@ export default defineSchema({
     timestamp:   v.number(),
   })
     .index("by_promotionId_eventType", ["promotionId", "eventType"]),
+
+  // ─── ADMIN PROMO COUPONS ──────────────────────────────────────────────────
+  // Custom discount codes created by admins (e.g. WELCOME10, DIWALI20).
+  // Completely separate from exchange coupons (the `coupons` table above).
+  promoCoupons: defineTable({
+    code:             v.string(),                     // Unique, uppercase (e.g. "WELCOME10")
+    description:      v.string(),                     // Admin-facing label
+    discountType:     v.union(
+                        v.literal("percentage"),
+                        v.literal("fixed")
+                      ),
+    discountValue:    v.number(),                     // 10 for 10%, or 20000 for ₹200 (paise for fixed)
+    minOrderPaise:    v.number(),                     // Minimum cart value to apply
+    maxDiscountPaise: v.optional(v.number()),         // Cap for percentage discounts
+    usageLimit:       v.number(),                     // Total uses allowed across all users
+    perUserLimit:     v.number(),                     // Max uses per individual user
+    usedCount:        v.number(),                     // Running total redemption counter
+    scope:            v.union(
+                        v.literal("platform"),        // Works at any boutique
+                        v.literal("boutique")         // Only at a specific boutique
+                      ),
+    boutiqueId:       v.optional(v.id("boutiques")),  // Required when scope = "boutique"
+    status:           v.union(
+                        v.literal("active"),
+                        v.literal("paused"),
+                        v.literal("expired")
+                      ),
+    startsAt:         v.optional(v.number()),         // Scheduled activation
+    expiresAt:        v.optional(v.number()),         // Auto-expiry
+    createdBy:        v.id("users"),                  // Admin who created it
+    createdAt:        v.number(),
+    updatedAt:        v.number(),
+  })
+    .index("by_code", ["code"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_boutiqueId", ["boutiqueId"]),
+
+  // ─── PROMO COUPON USAGE TRACKING ──────────────────────────────────────────
+  // One row per redemption — who used it, on which order, how much discount.
+  promoCouponUsages: defineTable({
+    promoCouponId:        v.id("promoCoupons"),
+    userId:               v.id("users"),
+    orderId:              v.id("orders"),
+    orderNumber:          v.string(),                 // Denormalized for admin display
+    discountAppliedPaise: v.number(),                 // Actual discount given
+    usedAt:               v.number(),
+  })
+    .index("by_promoCouponId", ["promoCouponId"])
+    .index("by_userId", ["userId"])
+    .index("by_orderId", ["orderId"])
+    .index("by_promoCouponId_userId", ["promoCouponId", "userId"]),
 });
 
