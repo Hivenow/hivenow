@@ -337,19 +337,22 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
       boutiqueId: displayProduct.boutiqueId as any,
     }).catch(err => console.error("Failed to log analytics:", err));
 
-    const toggleItem = useWishlistStore.getState().toggleItem;
-    const hasItem = useWishlistStore.getState().hasItem;
-    
+    const { saveForNextOrder, toggleItem, hasItem } = useWishlistStore.getState();
+    const pendingOrderBoutiqueId = useCartStore.getState().items[0]?.boutiqueId;
+    const wishlistProduct = {
+      id: displayProduct.id,
+      slug: displayProduct.slug,
+      name: displayProduct.name,
+      price: displayProduct.price,
+      imageUrl: displayProduct.imageUrl,
+      boutiqueName: displayProduct.boutiqueName,
+    };
+
     if (displayProduct.slug) {
-      if (!hasItem(displayProduct.slug)) {
-        toggleItem({
-          id: displayProduct.id,
-          slug: displayProduct.slug,
-          name: displayProduct.name,
-          price: displayProduct.price,
-          imageUrl: displayProduct.imageUrl,
-          boutiqueName: displayProduct.boutiqueName,
-        });
+      if (pendingOrderBoutiqueId) {
+        saveForNextOrder(wishlistProduct, pendingOrderBoutiqueId);
+      } else if (!hasItem(displayProduct.slug)) {
+        toggleItem(wishlistProduct);
       }
       setCrossBoutiqueModalOpen(false);
       setSidebarOpen(true);

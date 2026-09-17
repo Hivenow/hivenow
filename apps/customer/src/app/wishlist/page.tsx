@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { useWishlistStore } from "@/store/wishlist-store";
 import { ProductCard } from "@/components/product/ProductCard";
 
 export default function WishlistPage() {
-  const { items } = useWishlistStore();
+  const { items, clearPendingOrder } = useWishlistStore();
   const [hydrated, setHydrated] = useState(false);
+  const pendingOrderItems = items.filter((i) => i.pendingOrderBoutiqueId);
 
   useEffect(() => {
     setHydrated(true);
@@ -90,7 +91,45 @@ export default function WishlistPage() {
             </div>
           </div>
         ) : (
-          /* Wishlist Grid */
+          <>
+          {pendingOrderItems.length > 0 && (
+            <div className="mb-6 space-y-2.5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 block">
+                Ready For Your Next Order
+              </span>
+              {pendingOrderItems.map((item) => (
+                <div
+                  key={item.slug}
+                  className="rounded-2xl border border-amber-200/70 bg-amber-50/50 p-3.5 flex items-center gap-3"
+                >
+                  <div className="relative w-12 h-14 rounded-xl overflow-hidden bg-stone-100 border border-stone-200/70 shrink-0">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    ) : null}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-stone-900 truncate">{item.name}</p>
+                    <p className="text-[10px] text-stone-500 truncate">{item.boutiqueName}</p>
+                  </div>
+                  <Link
+                    href={`/products/${item.slug}`}
+                    className="h-8 px-3 bg-stone-950 hover:bg-stone-900 text-white rounded-lg text-[10.5px] font-bold flex items-center justify-center shrink-0 transition-colors"
+                  >
+                    Order now
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => clearPendingOrder(item.slug)}
+                    aria-label="Dismiss reminder"
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-100 shrink-0 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Wishlist Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
             {items.map((item) => {
               // Adapt WishlistProduct to ProductCardData schema expectations
@@ -114,6 +153,7 @@ export default function WishlistPage() {
               );
             })}
           </div>
+          </>
         )}
       </div>
     </div>

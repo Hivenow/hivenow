@@ -550,19 +550,22 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       boutiqueId: (product.boutique?.id ?? (product as any).boutiqueId) as any,
     }).catch(err => console.error("Failed to log analytics:", err));
 
-    const toggleItem = useWishlistStore.getState().toggleItem;
-    const hasItem = useWishlistStore.getState().hasItem;
-    
+    const { saveForNextOrder, toggleItem, hasItem } = useWishlistStore.getState();
+    const pendingOrderBoutiqueId = items[0]?.boutiqueId;
+    const wishlistProduct = {
+      id: product.id ?? (product as any)._id,
+      slug: product.slug,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.images[0] || "",
+      boutiqueName: product.boutique.name,
+    };
+
     if (product.slug) {
-      if (!hasItem(product.slug)) {
-        toggleItem({
-          id: product.id ?? (product as any)._id,
-          slug: product.slug,
-          name: product.name,
-          price: product.price,
-          imageUrl: product.images[0] || "",
-          boutiqueName: product.boutique.name,
-        });
+      if (pendingOrderBoutiqueId) {
+        saveForNextOrder(wishlistProduct, pendingOrderBoutiqueId);
+      } else if (!hasItem(product.slug)) {
+        toggleItem(wishlistProduct);
       }
       setCrossBoutiqueModalOpen(false);
       setSidebarOpen(true);

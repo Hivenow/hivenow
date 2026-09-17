@@ -30,6 +30,7 @@ import { useSessionStore } from "@/context/SessionContext";
 import { formatCurrency, toast } from "@hive/utils";
 import BeeLoader from "@/components/shared/BeeLoader";
 import { OrderConfirmationPushPrompt } from "@/components/checkout/OrderConfirmationPushPrompt";
+import { NextOrderSavedItemPrompt } from "@/components/checkout/NextOrderSavedItemPrompt";
 import { CUSTOMER_FEATURES } from "@/config/features";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -490,6 +491,11 @@ export default function OrderDetailPage() {
                   </span>
                 )}
               </div>
+            </motion.div>
+
+            {/* ── Saved-For-Next-Order Prompt (cross-boutique bag conflict) ───── */}
+            <motion.div variants={itemVariants}>
+              <NextOrderSavedItemPrompt orderId={order._id} boutiqueId={(order as any).boutiqueId} />
             </motion.div>
 
             {/* ── Restrained 4-Step Status Tracker ────────────────────────────── */}
