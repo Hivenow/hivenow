@@ -326,6 +326,11 @@ export function OrderMoneyTrail({ orderId }: { orderId: Id<"orders"> }) {
           paise={money.platformRevenuePaise}
           tone="text-indigo-700 font-bold"
         />
+        <Money
+          label="Razorpay fee (incl. GST)"
+          paise={data.payment?.gatewayFeePaise ?? null}
+          tone="text-red-700"
+        />
         <div className="border-t border-hive-border/40 my-2" />
         <Money label="Courier quoted" paise={data.estimatedCourierCostPaise} />
         <Money

@@ -63,6 +63,16 @@ export const getFinanceDashboardMetricsAdmin = query({
     // 8. Refund Rate: Total Refunds / Gross GMV
     const refundRate = grossGmv > 0 ? (totalRefunds / grossGmv) * 100 : 0;
 
+    // 9. Razorpay fees (GST included) kept on captured payments. Payments
+    // captured before fees were recorded are counted in paymentsMissingFee so
+    // the figure is never silently understated.
+    const capturedPayments = [
+      ...(await ctx.db.query("payments").withIndex("by_status", (q) => q.eq("status", "captured")).collect()),
+      ...(await ctx.db.query("payments").withIndex("by_status", (q) => q.eq("status", "refunded")).collect()),
+    ].filter((p) => p.razorpayPaymentId?.startsWith("pay_"));
+    const gatewayFees = capturedPayments.reduce((sum, p) => sum + (p.gatewayFeePaise ?? 0), 0);
+    const paymentsMissingFee = capturedPayments.filter((p) => p.gatewayFeePaise === undefined).length;
+
     return {
       grossGmv,
       netGmv,
@@ -72,6 +82,8 @@ export const getFinanceDashboardMetricsAdmin = query({
       availableForPayout,
       totalPaidOut,
       refundRate,
+      gatewayFees,
+      paymentsMissingFee,
     };
   },
 });

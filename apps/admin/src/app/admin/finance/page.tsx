@@ -176,6 +176,13 @@ export default function FinanceDashboardPage() {
               {formatCurrency(metrics.platformRevenue)}
             </span>
             <span className="text-[9px] text-[#A89F91] font-semibold mt-1">Commissions Net GST</span>
+            <span className="text-[9px] text-red-700 font-semibold">
+              Razorpay fees −{formatCurrency(metrics.gatewayFees)}
+              {metrics.paymentsMissingFee > 0 ? ` (${metrics.paymentsMissingFee} not recorded)` : ""}
+            </span>
+            <span className="text-[9px] text-hive-dark font-bold">
+              After fees {formatCurrency(metrics.platformRevenue - metrics.gatewayFees)}
+            </span>
           </div>
         </Card>
 

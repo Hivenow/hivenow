@@ -128,6 +128,12 @@ export const handleRazorpayWebhook = httpAction(async (ctx, request) => {
           method,
           capturedAmountPaise: paymentData.amount,
         });
+        // Razorpay's fee on this payment, for finance reports.
+        await ctx.runMutation(internal.payments.recordGatewayFee, {
+          razorpayOrderId,
+          feePaise: typeof paymentData.fee === "number" ? paymentData.fee : undefined,
+          taxPaise: typeof paymentData.tax === "number" ? paymentData.tax : undefined,
+        });
       } else if (eventType === "payment.failed") {
         await ctx.runMutation(internal.webhooks.razorpay.processPaymentFailed, {
           razorpayOrderId,

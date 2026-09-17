@@ -1287,6 +1287,11 @@ export default defineSchema({
     refundId:           v.optional(v.string()),
     refundAmount:       v.optional(v.number()),
     refundedAt:         v.optional(v.number()),
+    // What Razorpay kept on this payment (its `fee`, GST included; `tax` is the
+    // GST part). Recorded from the captured payment so finance reports show
+    // Hive's revenue after gateway cost.
+    gatewayFeePaise:    v.optional(v.number()),
+    gatewayTaxPaise:    v.optional(v.number()),
     webhookEvents:      v.array(v.object({
       event:     v.string(),
       timestamp: v.number(),

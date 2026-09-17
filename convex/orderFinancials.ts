@@ -167,6 +167,7 @@ export const getOrderFinancialsAdmin = query({
             status: payment.status,
             method: payment.method ?? null,
             amountPaise: payment.amount,
+            gatewayFeePaise: payment.gatewayFeePaise ?? null,
             currency: payment.currency,
             refundId: payment.refundId ?? null,
             refundAmountPaise: payment.refundAmount ?? null,

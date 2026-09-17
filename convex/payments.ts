@@ -1472,6 +1472,86 @@ export const verifyPaymentAndPlaceOrder = mutation({
   },
 });
 
+/** Save Razorpay's fee on a captured payment. Idempotent; ignores missing values. */
+export const recordGatewayFee = internalMutation({
+  args: {
+    razorpayOrderId: v.string(),
+    feePaise: v.optional(v.number()),
+    taxPaise: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    if (typeof args.feePaise !== "number") return { success: false, reason: "no_fee" };
+    const payment = await ctx.db
+      .query("payments")
+      .withIndex("by_razorpayOrderId", (q) => q.eq("razorpayOrderId", args.razorpayOrderId))
+      .first();
+    if (!payment) return { success: false, reason: "payment_not_found" };
+    if (payment.gatewayFeePaise === args.feePaise && payment.gatewayTaxPaise === args.taxPaise) {
+      return { success: true, reason: "unchanged" };
+    }
+    await ctx.db.patch(payment._id, {
+      gatewayFeePaise: args.feePaise,
+      gatewayTaxPaise: typeof args.taxPaise === "number" ? args.taxPaise : undefined,
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
+export const listCapturedPaymentsMissingFee = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const captured = await ctx.db
+      .query("payments")
+      .withIndex("by_status", (q) => q.eq("status", "captured"))
+      .collect();
+    const refunded = await ctx.db
+      .query("payments")
+      .withIndex("by_status", (q) => q.eq("status", "refunded"))
+      .collect();
+    return [...captured, ...refunded]
+      .filter((p) => p.gatewayFeePaise === undefined && p.razorpayOrderId && p.razorpayPaymentId?.startsWith("pay_"))
+      .slice(0, 200)
+      .map((p) => ({ razorpayOrderId: p.razorpayOrderId!, razorpayPaymentId: p.razorpayPaymentId! }));
+  },
+});
+
+/**
+ * Fill in Razorpay's fee for payments captured before fees were recorded.
+ * Read-only at Razorpay. Safe to run repeatedly; handles 200 per run.
+ */
+export const backfillGatewayFees = internalAction({
+  args: {},
+  handler: async (ctx): Promise<any> => {
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keyId || !keySecret) return { ok: false, reason: "razorpay_not_configured" };
+    const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
+
+    const rows: Array<{ razorpayOrderId: string; razorpayPaymentId: string }> =
+      await ctx.runQuery(internal.payments.listCapturedPaymentsMissingFee, {});
+    let recorded = 0;
+    const failed: string[] = [];
+    for (const row of rows) {
+      const res = await fetch(`https://api.razorpay.com/v1/payments/${row.razorpayPaymentId}`, {
+        headers: { Authorization: authHeader },
+      });
+      if (!res.ok) {
+        failed.push(`${row.razorpayPaymentId}: ${res.status}`);
+        continue;
+      }
+      const p = await res.json();
+      const result: any = await ctx.runMutation(internal.payments.recordGatewayFee, {
+        razorpayOrderId: row.razorpayOrderId,
+        feePaise: typeof p.fee === "number" ? p.fee : undefined,
+        taxPaise: typeof p.tax === "number" ? p.tax : undefined,
+      });
+      if (result?.success) recorded++;
+    }
+    return { ok: true, checked: rows.length, recorded, failed };
+  },
+});
+
 export const placeVerifiedOrderInternal = internalMutation({
   args: {
     checkoutSessionId: v.id("checkoutSessions"),
@@ -1529,6 +1609,7 @@ export const confirmPaymentAndPlaceOrder = action({
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const isMockOrder = String(expectation.razorpayOrderId || "").startsWith("order_mock_");
+    let paymentFee: { fee?: number; tax?: number } | null = null;
 
     if (!isMockOrder) {
       if (!keyId || !keySecret) {
@@ -1547,8 +1628,9 @@ export const confirmPaymentAndPlaceOrder = action({
           console.error(
             `[confirmPaymentAndPlaceOrder] Razorpay payment lookup failed (${res.status}) for ${args.razorpayPaymentId}: ${(await res.text()).slice(0, 300)}`
           );
-          if (res.status >= 400 && res.status < 500) {
-            // Razorpay says this payment id does not exist.
+          if (res.status === 400 || res.status === 404) {
+            // Razorpay says this payment id does not exist. (401/403 is our own
+            // key problem, not the customer's payment: treat as confirming.)
             throw new ConvexError("We couldn't find this payment. If money was taken from your account, please contact support.");
           }
           // Razorpay unavailable; the payment.captured webhook will place the order.
@@ -1576,9 +1658,21 @@ export const confirmPaymentAndPlaceOrder = action({
       if (payment.status !== "captured") {
         throw new ConvexError("This payment was not completed. You have not been charged for this order.");
       }
+      paymentFee = {
+        fee: typeof payment.fee === "number" ? payment.fee : undefined,
+        tax: typeof payment.tax === "number" ? payment.tax : undefined,
+      };
     }
 
-    return await ctx.runMutation(internal.payments.placeVerifiedOrderInternal, args);
+    const placed = await ctx.runMutation(internal.payments.placeVerifiedOrderInternal, args);
+    if (paymentFee) {
+      await ctx.runMutation(internal.payments.recordGatewayFee, {
+        razorpayOrderId: expectation.razorpayOrderId,
+        feePaise: paymentFee.fee,
+        taxPaise: paymentFee.tax,
+      });
+    }
+    return placed;
   },
 });
 
