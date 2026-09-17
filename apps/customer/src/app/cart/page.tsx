@@ -127,7 +127,7 @@ export default function CartPage() {
 
   // Promo Code calculations — now server-driven via checkout store
   const promoCouponDiscountPaise = useCheckoutStore.getState().promoCouponDiscountPaise;
-  let discountAmount = promoCouponDiscountPaise > 0 ? Math.round(promoCouponDiscountPaise / 100) : 0;
+  let discountAmount = promoCouponDiscountPaise > 0 ? promoCouponDiscountPaise / 100 : 0;
   let deliveryFee = subtotal >= 10000 ? 0 : 99;
 
   const taxAmount = 0;
@@ -159,7 +159,7 @@ export default function CartPage() {
         return;
       }
 
-      const discountRupees = Math.round(result.discountPaise / 100);
+      const discountRupees = result.discountPaise / 100;
       setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
       setPromoSuccessMsg(result.message);
       setPromoInput("");

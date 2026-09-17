@@ -24,7 +24,7 @@ import { restoreCheckoutSessionStock } from "./lib/inventory";
 import { resolveOrderReturnsAccepted, resolveOrderExchangesAccepted } from "./lib/returnPolicy";
 import { validateCouponForCart } from "./lib/coupons";
 import { applyCouponToOrder } from "./coupons";
-import { recordPromoCouponUsageHelper } from "./promoCoupons";
+import { computePromoDiscountPaise, recordPromoCouponUsageHelper } from "./promoCoupons";
 import { getBoutiqueStatus } from "./shared/boutiqueStatus";
 import { checkServiceability } from "./lib/serviceability";
 // ─── Input Schemas ───────────────────────────────────────────────────────────
@@ -176,24 +176,23 @@ export const getCheckoutPricing = query({
         });
       }
 
-      // Discount
+      // Discount is taken off the all-inclusive item total the customer sees,
+      // not the seller base price — same base as validatePromoCode and checkout.
+      const allInclusiveSubtotalPaise = args.items.reduce((sum, item, i) =>
+        sum + calculateAllInclusivePricePaise(
+          Math.round(itemsBreakdown[i].priceAtPurchaseRupees * 100), sellerTierKey, platformConfig
+        ) * item.quantity, 0);
+
       let discountPaise = 0;
       if (args.promoCouponId) {
         const promoCoupon = await ctx.db.get(args.promoCouponId);
         if (promoCoupon && promoCoupon.status === "active") {
-          if (promoCoupon.discountType === "percentage") {
-            discountPaise = Math.round(productSubtotalPaise * promoCoupon.discountValue / 100);
-            if (promoCoupon.maxDiscountPaise && discountPaise > promoCoupon.maxDiscountPaise) {
-              discountPaise = promoCoupon.maxDiscountPaise;
-            }
-          } else {
-            discountPaise = Math.min(promoCoupon.discountValue, productSubtotalPaise);
-          }
+          discountPaise = computePromoDiscountPaise(promoCoupon, allInclusiveSubtotalPaise);
         }
       } else if (args.promoCode === "WELCOME10") {
-        discountPaise = Math.round(productSubtotalPaise * 0.10);
+        discountPaise = Math.round(allInclusiveSubtotalPaise * 0.10);
       } else if (args.promoCode === "HIVEFIRST") {
-        discountPaise = Math.min(50000, productSubtotalPaise);
+        discountPaise = Math.min(50000, allInclusiveSubtotalPaise);
       }
 
       // Delivery fee (from dynamic Porter quote passed from frontend)
@@ -585,8 +584,16 @@ export const initCheckoutSessionInternal = internalMutation({
 
     const cleanPromoCode = args.promoCode ? args.promoCode.trim().toUpperCase() : "";
 
+    const platformConfig = await getPlatformConfig(ctx);
+    const sellerTierKey = primaryBoutique?.pricingTier || "bronze";
+    // The all-inclusive item total exactly as the pricing engine charges it.
+    const chargedSubtotalPaise = resolvedItems.reduce((sum, r) =>
+      sum + calculateAllInclusivePricePaise(r.basePricePaiseForPricing, sellerTierKey, platformConfig) * r.item.quantity, 0);
+
     // Server-Side Promo Validation (P0)
-    let expectedDiscount = 0;
+    // Computed in paise on the server's own all-inclusive subtotal. The client's
+    // figure is only checked against it; the server figure is what gets charged.
+    let expectedDiscountPaise = 0;
     if (args.promoCouponId) {
       const promoCoupon = await ctx.db.get(args.promoCouponId);
       if (!promoCoupon || promoCoupon.status !== "active") {
@@ -618,35 +625,23 @@ export const initCheckoutSessionInternal = internalMutation({
           throw new ConvexError("This coupon is only valid for a specific boutique.");
         }
       }
-      // Calculate discount
-      const subtotalPaise = Math.round(args.subtotal * 100);
-      if (promoCoupon.minOrderPaise && subtotalPaise < promoCoupon.minOrderPaise) {
+      if (promoCoupon.minOrderPaise && chargedSubtotalPaise < promoCoupon.minOrderPaise) {
         throw new ConvexError(`Minimum order of ₹${(promoCoupon.minOrderPaise / 100).toFixed(0)} required for this coupon.`);
       }
-      let discountPaise = 0;
-      if (promoCoupon.discountType === "percentage") {
-        discountPaise = Math.round(subtotalPaise * promoCoupon.discountValue / 100);
-        if (promoCoupon.maxDiscountPaise && discountPaise > promoCoupon.maxDiscountPaise) {
-          discountPaise = promoCoupon.maxDiscountPaise;
-        }
-      } else {
-        discountPaise = Math.min(promoCoupon.discountValue, subtotalPaise);
-      }
-      expectedDiscount = Math.round(discountPaise / 100);
+      expectedDiscountPaise = computePromoDiscountPaise(promoCoupon, chargedSubtotalPaise);
       validatedPromoCouponId = promoCoupon._id;
-      validatedPromoCouponDiscountPaise = discountPaise;
+      validatedPromoCouponDiscountPaise = expectedDiscountPaise;
     } else if (cleanPromoCode === "WELCOME10") {
-      expectedDiscount = Math.round(args.subtotal * 0.1);
+      expectedDiscountPaise = Math.round(chargedSubtotalPaise * 0.1);
     } else if (cleanPromoCode === "HIVEFIRST") {
-      expectedDiscount = Math.min(500, args.subtotal);
-    } else if (cleanPromoCode === "FREESHIP") {
-      expectedDiscount = 0;
-    } else if (cleanPromoCode) {
-      expectedDiscount = 0;
+      expectedDiscountPaise = Math.min(50000, chargedSubtotalPaise);
     }
 
-    if (args.discount !== expectedDiscount) {
-      throw new ConvexError(`Discount validation failed. Expected: ₹${expectedDiscount}, Got: ₹${args.discount}`);
+    // Same ₹1 tolerance as the subtotal check: the client may have rounded.
+    if (Math.abs(parseMoney(args.discount) - expectedDiscountPaise) > 100) {
+      throw new ConvexError(
+        `Discount validation failed. Expected: ₹${(expectedDiscountPaise / 100).toFixed(2)}, Got: ₹${args.discount}`
+      );
     }
 
     let expectedDeliveryFee: number;
@@ -665,8 +660,6 @@ export const initCheckoutSessionInternal = internalMutation({
     }
 
     // ─── v2: Authoritative server-side pricing via pricing engine ─────────
-    const platformConfig = await getPlatformConfig(ctx);
-    const sellerTierKey = primaryBoutique?.pricingTier || "bronze";
 
     const pricingItems = resolvedItems.map(r => ({
       sellerBasePricePaise: r.basePricePaiseForPricing,
@@ -674,7 +667,7 @@ export const initCheckoutSessionInternal = internalMutation({
     }));
 
     const deliveryFeePaise = parseMoney(args.deliveryFee);
-    const discountPaise = parseMoney(args.discount);
+    const discountPaise = expectedDiscountPaise;
 
     const pricing = calculateCheckoutPricing(
       pricingItems,
@@ -1427,7 +1420,8 @@ export async function verifyPaymentAndPlaceOrderInternal(
   // Record promo coupon usage if applied
   if (session.promoCouponId) {
     try {
-      const discountPaise = session.promoCouponDiscountPaise ?? Math.round((session.discount || 0) * 100);
+      // session.discount is already paise (initCheckoutSessionInternal stores pricing.discountPaise).
+      const discountPaise = session.promoCouponDiscountPaise ?? (session.discount || 0);
       await recordPromoCouponUsageHelper(ctx, {
         promoCouponId: session.promoCouponId,
         userId: user._id,

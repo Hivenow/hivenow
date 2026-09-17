@@ -244,7 +244,7 @@ export default function OrderReviewPage() {
   const subtotal = backendPricing?.subtotalRupees ?? rawSubtotal;
   const deliveryFee = backendPricing?.deliveryFeeRupees ?? (rawSubtotal >= 10000 ? 0 : 99);
   // Promo coupon discount from checkout store (server-validated), or backend pricing
-  const discountAmount = backendPricing?.discountRupees || (promoCouponDiscountPaise > 0 ? Math.round(promoCouponDiscountPaise / 100) : 0);
+  const discountAmount = backendPricing?.discountRupees || (promoCouponDiscountPaise > 0 ? promoCouponDiscountPaise / 100 : 0);
   // v2: separate platform charges
   const handlingCharge = backendPricing?.handlingChargeRupees ?? 0;
   const platformFee = backendPricing?.platformFeeRupees ?? 0;
@@ -380,7 +380,7 @@ export default function OrderReviewPage() {
         return;
       }
 
-      const discountRupees = Math.round(result.discountPaise / 100);
+      const discountRupees = result.discountPaise / 100;
       setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
       setPromoSuccessMsg(result.message);
       setPromoInput("");

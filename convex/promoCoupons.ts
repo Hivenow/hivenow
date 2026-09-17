@@ -3,9 +3,32 @@
 // Completely separate from exchange coupons (convex/coupons.ts).
 
 import { mutation, query, internalMutation, MutationCtx } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { requireRole, getAuthenticatedUser } from "./lib/auth";
+
+// ─── Discount math (shared) ─────────────────────────────────────────────────
+
+/**
+ * The one discount calculation for promo coupons. The coupon card, the review
+ * page price breakdown and the checkout session all call this, so the customer
+ * is shown and charged the same amount to the paisa.
+ *
+ * `productSubtotalPaise` is the all-inclusive item total the customer sees
+ * (delivery excluded).
+ */
+export function computePromoDiscountPaise(
+  coupon: Pick<Doc<"promoCoupons">, "discountType" | "discountValue" | "maxDiscountPaise">,
+  productSubtotalPaise: number
+): number {
+  if (productSubtotalPaise <= 0) return 0;
+  if (coupon.discountType === "percentage") {
+    const raw = Math.round((productSubtotalPaise * coupon.discountValue) / 100);
+    const capped = coupon.maxDiscountPaise ? Math.min(raw, coupon.maxDiscountPaise) : raw;
+    return Math.min(capped, productSubtotalPaise);
+  }
+  return Math.min(coupon.discountValue, productSubtotalPaise);
+}
 
 // ─── Admin: Create ──────────────────────────────────────────────────────────
 
@@ -337,18 +360,15 @@ export const validatePromoCode = query({
     }
 
     // Calculate discount
-    let discountPaise: number;
+    const discountPaise = computePromoDiscountPaise(coupon, args.cartTotalPaise);
     let discountLabel: string;
 
     if (coupon.discountType === "percentage") {
-      const raw = Math.round((args.cartTotalPaise * coupon.discountValue) / 100);
-      discountPaise = coupon.maxDiscountPaise ? Math.min(raw, coupon.maxDiscountPaise) : raw;
       discountLabel = `${coupon.discountValue}% off`;
       if (coupon.maxDiscountPaise) {
         discountLabel += ` (up to ₹${(coupon.maxDiscountPaise / 100).toLocaleString("en-IN")})`;
       }
     } else {
-      discountPaise = Math.min(coupon.discountValue, args.cartTotalPaise);
       discountLabel = `₹${(coupon.discountValue / 100).toLocaleString("en-IN")} off`;
     }
 
@@ -360,7 +380,7 @@ export const validatePromoCode = query({
       discountLabel,
       discountType: coupon.discountType,
       discountValue: coupon.discountValue,
-      message: `${code} applied! You save ₹${(discountPaise / 100).toLocaleString("en-IN")}.`,
+      message: `${code} applied! You save ₹${(discountPaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}.`,
     };
   },
 });
