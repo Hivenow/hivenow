@@ -9,7 +9,14 @@ import { requireRole } from "./lib/auth";
 import { updateBoutiqueProductCount } from "./boutiques";
 import { getPublicUrl, extractR2ObjectKeys } from "./media/api";
 import { getAllowedSpecKeys, validateAndCleanProductDetails, validateProductDetailsForCategory } from "./lib/verticals";
-import { getPlatformSettings, calculateProductPricing } from "./pricingService";
+import {
+  getPlatformSettings,
+  calculateProductPricing,
+  getPlatformConfig,
+  calculateAllInclusivePricePaise,
+  calculateTierPlatformCharges,
+  calculateSellerItemPricing,
+} from "./pricingService";
 import { triggerNotification } from "./lib/notifications";
 
 
@@ -687,6 +694,40 @@ export const requestChangesProductAdmin = mutation({
  * Update product details from admin console.
  * Admin-only mutation.
  */
+/**
+ * Price split for the admin product editor, from the same pricing engine
+ * checkout and the seller portal use, with the product's boutique tier.
+ */
+export const getProductPricingPreviewAdmin = query({
+  args: {
+    productId: v.id("products"),
+    basePricePaise: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, "admin");
+    if (!(args.basePricePaise > 0)) return null;
+    const product = await ctx.db.get(args.productId);
+    if (!product) return null;
+    const boutique = await ctx.db.get(product.boutiqueId);
+    const tierKey = (boutique as any)?.pricingTier || "bronze";
+    const config = await getPlatformConfig(ctx);
+
+    const charges = calculateTierPlatformCharges(tierKey, config);
+    const seller = calculateSellerItemPricing(args.basePricePaise, tierKey, config);
+    return {
+      tierName: seller.tierName,
+      customerPricePaise: calculateAllInclusivePricePaise(args.basePricePaise, tierKey, config),
+      handlingChargePaise: charges.handlingChargePaise,
+      platformFeePaise: charges.platformFeePaise,
+      platformChargesGstPaise: charges.platformChargesGstPaise,
+      sellerCommissionPercent: seller.sellerCommissionPercent,
+      sellerCommissionPaise: seller.sellerCommissionPaise,
+      sellerCommissionGstPaise: seller.sellerCommissionGstPaise,
+      sellerPayoutPaise: seller.sellerPayoutPaise,
+    };
+  },
+});
+
 export const updateProductDetailsAdmin = mutation({
   args: {
     id: v.id("products"),
@@ -759,16 +800,24 @@ export const updateProductDetailsAdmin = mutation({
       autoDeactivatedBecauseOutOfStock = false;
     }
 
-    // Compute Pricing markup — all DB values and args.price are in PAISE
-    let basePricePaise = args.price !== undefined ? args.price : (product.basePrice ?? product.price ?? 0);
+    // Pricing — all DB values and args.price are in PAISE. args.price is the
+    // seller's BASE price; the stored `price` is the all-inclusive storefront
+    // price, computed exactly as the seller's own create/update does. Writing
+    // the base price into `price` drops the fees and makes checkout reject the
+    // item as a subtotal mismatch.
+    const basePricePaise = args.price !== undefined ? args.price : (product.basePrice ?? product.price ?? 0);
     let customerPrice = product.price;
-    let baseDiscountPricePaise = args.discountPrice !== undefined ? args.discountPrice : product.baseDiscountPrice;
+    const baseDiscountPricePaise = args.discountPrice !== undefined ? args.discountPrice : product.baseDiscountPrice;
     let customerDiscountPrice = product.discountPrice;
 
     if (args.price !== undefined || args.discountPrice !== undefined) {
-      // v2: Product price = seller base price (no markup)
-      customerPrice = basePricePaise;
-      customerDiscountPrice = baseDiscountPricePaise || undefined;
+      const boutique = await ctx.db.get(product.boutiqueId);
+      const tierKey = (boutique as any)?.pricingTier || "bronze";
+      const config = await getPlatformConfig(ctx);
+      customerPrice = calculateAllInclusivePricePaise(basePricePaise, tierKey, config);
+      customerDiscountPrice = baseDiscountPricePaise
+        ? calculateAllInclusivePricePaise(baseDiscountPricePaise, tierKey, config)
+        : undefined;
     }
 
 

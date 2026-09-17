@@ -762,7 +762,7 @@ export default function AdminProductsPage() {
                 },
                 {
                   label: "Pricing Validity (> ₹0)",
-                  desc: `Product price is ₹${qualityCheckProduct.price.toLocaleString("en-IN")}. (Weight: 16.6%)`,
+                  desc: `Product price is ${formatCurrency(qualityCheckProduct.price)}. (Weight: 16.6%)`,
                   passed: qualityCheckProduct.qualityChecks?.price
                 },
                 {
@@ -866,7 +866,7 @@ export default function AdminProductsPage() {
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="font-serif font-black text-hive-dark text-sm truncate">{selectedProduct.name}</span>
-                <span className="text-[10px] text-hive-text-muted">By {selectedProduct.boutiqueName} • Price: ₹{selectedProduct.price}</span>
+                <span className="text-[10px] text-hive-text-muted">By {selectedProduct.boutiqueName} • Price: {formatCurrency(selectedProduct.price)}</span>
               </div>
             </div>
           )}
@@ -968,7 +968,7 @@ export default function AdminProductsPage() {
                 <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1 mt-2 font-sans">
                   <span>Boutique: <strong className="text-hive-dark">{historyProduct.boutiqueName}</strong></span>
                   <span>Category: <strong className="text-hive-dark">{historyProduct.categoryName}</strong></span>
-                  <span>Price: <strong className="text-hive-dark">₹{historyProduct.price.toLocaleString("en-IN")}</strong></span>
+                  <span>Price: <strong className="text-hive-dark">{formatCurrency(historyProduct.price)}</strong></span>
                 </div>
               </div>
             </div>

@@ -1754,3 +1754,69 @@ export const seedStationeryAttributeSchemas = internalMutation({
     };
   },
 });
+
+/**
+ * Repair products whose storefront `price` lost its fees.
+ *
+ * Until 2026-09-17 the admin product editor (updateProductDetailsAdmin, also
+ * run by "Approve Listing") wrote the seller's BASE price into `price`. Those
+ * products show the base price on the storefront and fail checkout, because
+ * the server charges the all-inclusive price. This recomputes `price` (and
+ * `discountPrice`) from the base prices exactly as the seller's own update
+ * does. Only rows where price === basePrice (or discountPrice ===
+ * baseDiscountPrice) are touched.
+ *
+ * Dry run by default: `npx convex run migrations:repairFeelessProductPrices '{}'`
+ * then with `'{"apply":true}'`.
+ */
+export const repairFeelessProductPrices = internalMutation({
+  args: { apply: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const config = await getPlatformConfig(ctx);
+    const products = await ctx.db.query("products").collect();
+    const tierByBoutique = new Map<string, string>();
+    const changes: Array<{
+      id: Id<"products">;
+      name: string;
+      tier: string;
+      price: { from: number; to: number };
+      discountPrice?: { from: number | undefined; to: number | undefined };
+    }> = [];
+
+    for (const p of products) {
+      const priceBroken = p.basePrice !== undefined && p.basePrice > 0 && p.price === p.basePrice;
+      const discountBroken =
+        p.baseDiscountPrice !== undefined && p.baseDiscountPrice > 0 && p.discountPrice === p.baseDiscountPrice;
+      if (!priceBroken && !discountBroken) continue;
+
+      const boutiqueKey = String(p.boutiqueId);
+      if (!tierByBoutique.has(boutiqueKey)) {
+        const boutique = await ctx.db.get(p.boutiqueId);
+        tierByBoutique.set(boutiqueKey, (boutique as any)?.pricingTier || "bronze");
+      }
+      const tier = tierByBoutique.get(boutiqueKey)!;
+
+      const patch: { price?: number; discountPrice?: number } = {};
+      const change: (typeof changes)[number] = { id: p._id, name: p.name, tier, price: { from: p.price, to: p.price } };
+      if (priceBroken) {
+        patch.price = calculateAllInclusivePricePaise(p.basePrice!, tier, config);
+        change.price.to = patch.price;
+      }
+      if (discountBroken) {
+        patch.discountPrice = calculateAllInclusivePricePaise(p.baseDiscountPrice!, tier, config);
+        change.discountPrice = { from: p.discountPrice, to: patch.discountPrice };
+      }
+      changes.push(change);
+      if (args.apply) {
+        await ctx.db.patch(p._id, { ...patch, updatedAt: Date.now() });
+      }
+    }
+
+    return {
+      applied: !!args.apply,
+      count: changes.length,
+      changes,
+      note: args.apply ? "Prices rewritten." : "Dry run. Re-run with \"apply\":true to write.",
+    };
+  },
+});
