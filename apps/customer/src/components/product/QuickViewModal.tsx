@@ -686,7 +686,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
               EXPRESS DELIVERY
             </span>
             <h2 className="text-base sm:text-lg font-serif font-bold text-stone-900">
-              Two shops. Two quick orders.
+              Want this one too?
             </h2>
           </div>
         }
@@ -694,7 +694,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
       >
         <div className="flex flex-col py-1 px-1 text-left select-none">
           <p className="text-xs text-stone-600 leading-relaxed font-normal mb-4">
-            Your bag already has items from another shop. Hive keeps orders from different shops separate, so you can place each one quickly.
+            Your current bag is already ready to go. Save this one and place it as your next order.
           </p>
 
           <hr className="border-stone-100 mb-4" />
