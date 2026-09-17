@@ -201,10 +201,11 @@ export default function OrderReviewPage() {
   const rawSubtotal = orderItems.reduce((total, item) => total + item.price * item.quantity, 0);
 
   const itemsForPricing = useMemo(() => {
+    // The cart keeps rupees; the server works in paise, converted here once.
     return orderItems.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
-      price: item.price,
+      pricePaise: Math.round(item.price * 100),
       size: item.size,
     }));
   }, [orderItems]);
@@ -226,16 +227,17 @@ export default function OrderReviewPage() {
   
   const [quoteId] = useState(() => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)));
 
-  const rawDeliveryFee = (deliveryQuote && deliveryQuote.serviceable && typeof deliveryQuote.customerPaidFee === "number")
-    ? deliveryQuote.customerPaidFee / 100
-    : undefined;
+  const quotedDeliveryFeePaise: number | undefined =
+    deliveryQuote && deliveryQuote.serviceable && typeof deliveryQuote.customerPaidFee === "number"
+      ? deliveryQuote.customerPaidFee
+      : undefined;
 
   const backendPricing = useQuery(
     api.payments.getCheckoutPricing,
     orderItems.length > 0
       ? {
           items: itemsForPricing,
-          deliveryFee: rawDeliveryFee,
+          deliveryFeePaise: quotedDeliveryFeePaise,
           promoCode: appliedPromo || undefined,
           promoCouponId: promoCouponId ? (promoCouponId as Id<"promoCoupons">) : undefined,
         }
@@ -269,7 +271,7 @@ export default function OrderReviewPage() {
       userLng: Number(selectedAddress.lng),
       userPincode: selectedAddress.pincode,
       boutiqueId: boutiqueId as any,
-      subtotal: subtotal,
+      subtotalPaise: Math.round(subtotal * 100),
       quoteId,
     }).then((quote) => {
       if (active) {
@@ -451,7 +453,7 @@ export default function OrderReviewPage() {
       return {
         productId: resolvedProductId,
         name: item.name,
-        price: item.price, // already in rupees
+        pricePaise: Math.round(item.price * 100),
         imageUrl: item.imageUrl || "",
         boutiqueName: item.boutiqueName,
         size: item.size,
@@ -481,10 +483,11 @@ export default function OrderReviewPage() {
         deliverySlot: resolvedDeliverySlot,
         paymentMethod: "online",
         items: snapshotItems,
-        subtotal: subtotal,
-        deliveryFee: deliveryFee,
-        discount: discountAmount,
-        total: total,
+        // Server-priced paise; handlePay only runs once backendPricing has loaded.
+        subtotalPaise: backendPricing!.subtotalPaise,
+        deliveryFeePaise: backendPricing!.deliveryFeePaise,
+        discountPaise: backendPricing!.discountPaise,
+        totalPaise: backendPricing!.totalPaise,
         promoCode: appliedPromo || undefined,
         promoCouponId: promoCouponId ? (promoCouponId as Id<"promoCoupons">) : undefined,
         promoCouponDiscountPaise: promoCouponDiscountPaise || undefined,

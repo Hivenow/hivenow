@@ -1372,7 +1372,11 @@ export default defineSchema({
 
   checkoutQuotes: defineTable({
     checkoutSessionId: v.string(), 
-    deliveryFee: v.number(),
+    // Paise. The rupee fields remain only on quotes stored before paise
+    // (15-minute lifetime); nothing writes them any more.
+    deliveryFeePaise: v.optional(v.number()),
+    subtotalPaise: v.optional(v.number()),
+    deliveryFee: v.optional(v.number()),
     quotedAt: v.number(),
     expiresAt: v.number(),
     // What the quote was priced for. Checkout accepts the quote only for the

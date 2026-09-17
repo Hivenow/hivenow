@@ -117,7 +117,7 @@ export const runHyperlocalTests = mutation({
       userLat: 9.98943,
       userLng: 76.31512,
       boutiqueId: testBoutiqueId,
-      subtotal: 180000, // ₹1800 in paise
+      subtotalPaise: 180000, // ₹1800
     });
 
     if (!quote.serviceable) {
@@ -159,7 +159,7 @@ export const runHyperlocalTests = mutation({
       userLat: 9.9001,
       userLng: 76.3001,
       boutiqueId: testBoutiqueId,
-      subtotal: 180000, // ₹1800 in paise
+      subtotalPaise: 180000, // ₹1800
     });
 
     if (expiredQuote.isCached === true) {
@@ -184,7 +184,7 @@ export const runHyperlocalTests = mutation({
       userLat: 9.98943,
       userLng: 76.31512,
       boutiqueId: testBoutiqueId,
-      subtotal: 280000, // ₹2800 in paise
+      subtotalPaise: 280000, // ₹2800
     });
 
     if (freeQuote.customerPaidFee !== 0) {

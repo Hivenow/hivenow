@@ -64,13 +64,13 @@ export const getCachedDistanceRecord = internalQuery({
 export const storeQuote = internalMutation({
   args: {
     quoteId: v.string(),
-    deliveryFee: v.number(),
+    deliveryFeePaise: v.number(),
     quotedAt: v.number(),
     expiresAt: v.number(),
     boutiqueId: v.string(),
     userLat: v.number(),
     userLng: v.number(),
-    subtotal: v.number(),
+    subtotalPaise: v.number(),
   },
   handler: async (ctx, args) => {
     // Delete any existing quote for this ID
@@ -83,13 +83,13 @@ export const storeQuote = internalMutation({
     }
     await ctx.db.insert("checkoutQuotes", {
       checkoutSessionId: args.quoteId,
-      deliveryFee: args.deliveryFee,
+      deliveryFeePaise: args.deliveryFeePaise,
       quotedAt: args.quotedAt,
       expiresAt: args.expiresAt,
       boutiqueId: args.boutiqueId,
       userLat: args.userLat,
       userLng: args.userLng,
-      subtotal: args.subtotal,
+      subtotalPaise: args.subtotalPaise,
     });
   }
 });
@@ -273,7 +273,8 @@ export async function calculateDeliveryQuoteAction(
     userLng:    number;
     userPincode?: string;
     boutiqueId: any;
-    subtotal:   number;
+    /** All-inclusive cart total, paise. */
+    subtotalPaise: number;
   }
 ): Promise<any> {
   const boutique: any = await ctx.runQuery(internal.routing.getBoutiqueRoutingData, { boutiqueId: args.boutiqueId });
@@ -331,7 +332,7 @@ export async function calculateDeliveryQuoteAction(
             : 10000;
           
           let finalFeePaise = porterFeePaise;
-          if (args.subtotal >= thresholdRupees) {
+          if (args.subtotalPaise >= thresholdRupees * 100) {
             finalFeePaise = 0;
           }
 
@@ -426,7 +427,6 @@ export async function calculateDeliveryQuoteAction(
 
   // Strict reliance on internal hyperlocal pricing
 
-  const subtotalRupees = args.subtotal; // args.subtotal is now passed in rupees
   
   let standardFee = 99;
   if (distanceKm <= 3) {
@@ -441,7 +441,7 @@ export async function calculateDeliveryQuoteAction(
     ? boutique.freeDeliveryThreshold
     : 10000;
   let finalFeeRupees = standardFee;
-  if (subtotalRupees >= thresholdRupees) {
+  if (args.subtotalPaise >= thresholdRupees * 100) {
     finalFeeRupees = 0;
   }
 
@@ -465,22 +465,26 @@ export const getDeliveryQuoteAction = action({
     userLng:    v.number(),
     userPincode: v.optional(v.string()),
     boutiqueId: v.id("boutiques"),
-    subtotal:   v.number(),
+    /** All-inclusive cart total in paise. */
+    subtotalPaise: v.optional(v.number()),
+    /** @deprecated Rupees, from checkout pages loaded before paise. */
+    subtotal:   v.optional(v.number()),
     quoteId:    v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<any> => {
-    const result = await calculateDeliveryQuoteAction(ctx, args);
+    const subtotalPaise = args.subtotalPaise ?? Math.round((args.subtotal ?? 0) * 100);
+    const result = await calculateDeliveryQuoteAction(ctx, { ...args, subtotalPaise });
     
     if (args.quoteId && result && result.serviceable) {
       await ctx.runMutation(internal.routing.storeQuote, {
         quoteId: args.quoteId,
-        deliveryFee: result.customerPaidFee / 100, // Convert paise to rupees
+        deliveryFeePaise: result.customerPaidFee,
         quotedAt: result.quotedAt,
         expiresAt: result.quotedAt + 15 * 60 * 1000, // 15 mins expiry
         boutiqueId: String(args.boutiqueId),
         userLat: args.userLat,
         userLng: args.userLng,
-        subtotal: args.subtotal,
+        subtotalPaise,
       });
     }
     return result;

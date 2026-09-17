@@ -11,7 +11,6 @@ import { incrementBoutiqueOrderCount } from "./lib/boutiqueCounters";
 import { validateProductSizeAndStock, MOCK_INVENTORY } from "./lib/mockInventory";
 import { internal } from "./_generated/api";
 import { anyApi } from "convex/server";
-import { parseMoney } from "./lib/money";
 import { calculateDeliveryQuoteAction } from "./routing";
 import { getPlatformConfig, calculateCheckoutPricing, calculateSellerItemPricing, calculateAllInclusivePricePaise } from "./pricingService";
 
@@ -30,7 +29,10 @@ import { checkServiceability } from "./lib/serviceability";
 const cartItemArg = v.object({
   productId: v.string(),
   name: v.string(),
-  price: v.number(),
+  /** All-inclusive unit price, paise. */
+  pricePaise: v.optional(v.number()),
+  /** @deprecated Rupees, from checkout pages loaded before paise. */
+  price: v.optional(v.number()),
   imageUrl: v.string(),
   boutiqueName: v.string(),
   size: v.string(),
@@ -40,6 +42,22 @@ const cartItemArg = v.object({
   scheduledProcessingDate: v.optional(v.string()),
   reservationId: v.optional(v.string()),
 });
+
+// ─── Money at the API edge ───────────────────────────────────────────────────
+// Checkout works in paise. Clients send paise; checkout pages loaded before the
+// switch still send rupees, converted here once and nowhere else.
+
+function unitPricePaise(item: { pricePaise?: number; price?: number }): number {
+  if (typeof item.pricePaise === "number") return Math.round(item.pricePaise);
+  if (typeof item.price === "number") return Math.round(item.price * 100);
+  throw new ConvexError("Item price is missing. Please refresh checkout.");
+}
+
+function amountPaise(paise: number | undefined, rupees: number | undefined, label: string): number {
+  if (typeof paise === "number") return Math.round(paise);
+  if (typeof rupees === "number") return Math.round(rupees * 100);
+  throw new ConvexError(`${label} is missing. Please refresh checkout.`);
+}
 
 // Constant-time hex string comparison to prevent timing attacks
 function constantTimeCompare(a: string, b: string): boolean {
@@ -94,9 +112,14 @@ export const getCheckoutPricing = query({
     items: v.array(v.object({
       productId: v.string(),
       quantity: v.number(),
-      price: v.number(),
+      /** All-inclusive unit price, paise. */
+      pricePaise: v.optional(v.number()),
+      /** @deprecated Rupees. */
+      price: v.optional(v.number()),
       size: v.string(),
     })),
+    deliveryFeePaise: v.optional(v.number()),
+    /** @deprecated Rupees. */
     deliveryFee: v.optional(v.number()),
     promoCode: v.optional(v.string()),
     promoCouponId: v.optional(v.id("promoCoupons")),
@@ -161,7 +184,7 @@ export const getCheckoutPricing = query({
           canonicalPricePaise = productRow.baseDiscountPrice ?? productRow.basePrice ?? productRow.discountPrice ?? productRow.price;
         } else {
           // Unknown product — use client price (validation happens at checkout)
-          canonicalPricePaise = Math.round(item.price * 100);
+          canonicalPricePaise = unitPricePaise(item);
         }
 
         productSubtotalPaise += canonicalPricePaise * item.quantity;
@@ -193,8 +216,8 @@ export const getCheckoutPricing = query({
       }
 
       // Delivery fee (from dynamic Porter quote passed from frontend)
-      let deliveryFeePaise = (args.deliveryFee !== undefined)
-        ? Math.round(args.deliveryFee * 100)
+      const deliveryFeePaise = args.deliveryFeePaise !== undefined || args.deliveryFee !== undefined
+        ? amountPaise(args.deliveryFeePaise, args.deliveryFee, "Delivery fee")
         : (productSubtotalPaise >= 1000000 ? 0 : 9900); // ₹99 default
 
       // v2: Use pricing engine for authoritative calculation
@@ -202,7 +225,7 @@ export const getCheckoutPricing = query({
         args.items.map(item => ({
           sellerBasePricePaise: itemsBreakdown.find(b => b.productId === item.productId)
             ? Math.round(itemsBreakdown.find(b => b.productId === item.productId)!.priceAtPurchaseRupees * 100)
-            : Math.round(item.price * 100),
+            : unitPricePaise(item),
           quantity: item.quantity,
         })),
         deliveryFeePaise,
@@ -258,10 +281,16 @@ export const initCheckoutSessionInternal = internalMutation({
     deliverySlot: v.string(),
     paymentMethod: v.string(),
     items: v.array(cartItemArg),
-    subtotal: v.number(),
-    deliveryFee: v.number(),
-    discount: v.number(),
-    total: v.number(),
+    // Paise. The rupee fields are accepted only from checkout pages loaded
+    // before the switch to paise.
+    subtotalPaise: v.optional(v.number()),
+    deliveryFeePaise: v.optional(v.number()),
+    discountPaise: v.optional(v.number()),
+    totalPaise: v.optional(v.number()),
+    subtotal: v.optional(v.number()),
+    deliveryFee: v.optional(v.number()),
+    discount: v.optional(v.number()),
+    total: v.optional(v.number()),
     promoCode: v.optional(v.string()),
     /** Exchange store credit. Separate from promoCode — see the coupon block below. */
     couponCode: v.optional(v.string()),
@@ -278,6 +307,12 @@ export const initCheckoutSessionInternal = internalMutation({
     // quote the server priced itself (getDeliveryQuoteAction), checked below
     // against this order's shop, delivery point and cart once those are known.
     const DELIVERY_PRICE_CHANGED = "Delivery price changed. Please refresh checkout and try again.";
+    const client = {
+      subtotalPaise: amountPaise(args.subtotalPaise, args.subtotal, "Subtotal"),
+      deliveryFeePaise: amountPaise(args.deliveryFeePaise, args.deliveryFee, "Delivery fee"),
+      discountPaise: amountPaise(args.discountPaise, args.discount, "Discount"),
+      totalPaise: amountPaise(args.totalPaise, args.total, "Total"),
+    };
     const storedQuote = args.quoteId
       ? await ctx.db.query("checkoutQuotes")
           .withIndex("by_checkoutSessionId", (q) => q.eq("checkoutSessionId", args.quoteId as string))
@@ -502,7 +537,7 @@ export const initCheckoutSessionInternal = internalMutation({
         const allInclusivePricePaise = productRow.price ?? productRow.basePrice;
         basePricePaiseForPricing = productRow.baseDiscountPrice ?? productRow.basePrice ?? productRow.discountPrice ?? productRow.price;
 
-        if (Math.abs(allInclusivePricePaise - Math.round(item.price * 100)) > 100) {
+        if (Math.abs(allInclusivePricePaise - unitPricePaise(item)) > 100) {
           throw new ConvexError({
             code: "STALE_CART_PRICE",
             message: "The prices of some items in your cart have been updated. Please review your new total before checking out.",
@@ -510,7 +545,7 @@ export const initCheckoutSessionInternal = internalMutation({
         }
         activePricePaise = allInclusivePricePaise;
       } else {
-        activePricePaise = Math.round(item.price * 100);
+        activePricePaise = unitPricePaise(item);
         basePricePaiseForPricing = activePricePaise;
       }
         
@@ -527,9 +562,9 @@ export const initCheckoutSessionInternal = internalMutation({
     }
 
     // Verify product subtotal in integer Paise
-    const clientSubtotalPaise = Math.round(args.subtotal * 100);
+    const clientSubtotalPaise = client.subtotalPaise;
     if (Math.abs(clientSubtotalPaise - expectedSubtotalPaise) > 100) {
-      console.error(`[TAMPERING_CHECK] Mismatch detected. clientSubtotalPaise: ${clientSubtotalPaise}, expectedSubtotalPaise: ${expectedSubtotalPaise}, client args.subtotal: ${args.subtotal}`);
+      console.error(`[TAMPERING_CHECK] Mismatch detected. clientSubtotalPaise: ${clientSubtotalPaise}, expectedSubtotalPaise: ${expectedSubtotalPaise}`);
       throw new ConvexError(`Security Exception: Cart subtotal mismatch. Price tampering detected.`);
     }
 
@@ -547,8 +582,7 @@ export const initCheckoutSessionInternal = internalMutation({
 
     const primaryBoutique = (await ctx.db.get(primaryBoutiqueId)) as any;
     if (primaryBoutique && primaryBoutique.minimumOrderValue !== undefined) {
-      const subtotalPaise = Math.round(args.subtotal * 100);
-      if (subtotalPaise < primaryBoutique.minimumOrderValue) {
+      if (client.subtotalPaise < primaryBoutique.minimumOrderValue) {
         throw new ConvexError(
           `Minimum order value for ${primaryBoutique.boutiqueName || primaryBoutique.name} is ₹${(primaryBoutique.minimumOrderValue / 100).toFixed(2)}. Please add more items.`
         );
@@ -618,9 +652,9 @@ export const initCheckoutSessionInternal = internalMutation({
     // reachable by a hand-crafted request.
 
     // Same ₹1 tolerance as the subtotal check: the client may have rounded.
-    if (Math.abs(parseMoney(args.discount) - expectedDiscountPaise) > 100) {
+    if (Math.abs(client.discountPaise - expectedDiscountPaise) > 100) {
       throw new ConvexError(
-        `Discount validation failed. Expected: ₹${(expectedDiscountPaise / 100).toFixed(2)}, Got: ₹${args.discount}`
+        `Discount validation failed. Expected: ₹${(expectedDiscountPaise / 100).toFixed(2)}, Got: ₹${(client.discountPaise / 100).toFixed(2)}`
       );
     }
 
@@ -628,15 +662,20 @@ export const initCheckoutSessionInternal = internalMutation({
     // bigger than this one (a bigger cart can only unlock free delivery). Quotes
     // stored before these fields existed carry none of them and are refused.
     const COORD_TOLERANCE = 0.0005; // ~50 m
+    const quoteFeePaise = storedQuote.deliveryFeePaise
+      ?? (typeof storedQuote.deliveryFee === "number" ? Math.round(storedQuote.deliveryFee * 100) : undefined);
+    const quoteSubtotalPaise = storedQuote.subtotalPaise
+      ?? (typeof storedQuote.subtotal === "number" ? Math.round(storedQuote.subtotal * 100) : undefined);
     const quoteMatchesOrder =
+      typeof quoteFeePaise === "number" &&
       storedQuote.boutiqueId === String(primaryBoutiqueId) &&
       typeof storedQuote.userLat === "number" &&
       typeof storedQuote.userLng === "number" &&
       Math.abs(storedQuote.userLat - deliveryLat) <= COORD_TOLERANCE &&
       Math.abs(storedQuote.userLng - deliveryLng) <= COORD_TOLERANCE &&
-      typeof storedQuote.subtotal === "number" &&
-      chargedSubtotalPaise / 100 + 1 >= storedQuote.subtotal;
-    if (!quoteMatchesOrder || Math.abs(args.deliveryFee - storedQuote.deliveryFee) > 1) {
+      typeof quoteSubtotalPaise === "number" &&
+      chargedSubtotalPaise + 100 >= quoteSubtotalPaise;
+    if (!quoteMatchesOrder || Math.abs(client.deliveryFeePaise - quoteFeePaise!) > 100) {
       throw new ConvexError(DELIVERY_PRICE_CHANGED);
     }
 
@@ -647,7 +686,7 @@ export const initCheckoutSessionInternal = internalMutation({
       quantity: r.item.quantity,
     }));
 
-    const deliveryFeePaise = parseMoney(storedQuote.deliveryFee);
+    const deliveryFeePaise = quoteFeePaise!;
     const discountPaise = expectedDiscountPaise;
 
     const pricing = calculateCheckoutPricing(
@@ -660,10 +699,10 @@ export const initCheckoutSessionInternal = internalMutation({
     );
 
     // Server-calculated total is authoritative. Verify client total is within tolerance.
-    const clientTotalPaise = Math.round(args.total * 100);
+    const clientTotalPaise = client.totalPaise;
     if (Math.abs(pricing.totalPayablePaise - clientTotalPaise) > 200) {
       console.error(`[PRICING_DRIFT] Server total: ${pricing.totalPayablePaise}, Client total: ${clientTotalPaise}`);
-      throw new ConvexError(`Order total mismatch. Server calculated ₹${(pricing.totalPayablePaise / 100).toFixed(2)}, got ₹${args.total.toFixed(2)}. Please refresh.`);
+      throw new ConvexError(`Order total mismatch. Server calculated ₹${(pricing.totalPayablePaise / 100).toFixed(2)}, got ₹${(clientTotalPaise / 100).toFixed(2)}. Please refresh.`);
     }
 
     const now = Date.now();
@@ -767,8 +806,11 @@ export const initCheckoutSessionInternal = internalMutation({
         sellerTierKey,
         platformConfig
       );
+      // Session items hold the server's paise price; the client's own price
+      // fields are dropped so no rupee value is ever stored.
+      const { pricePaise: _clientPricePaise, price: _clientPrice, ...clientItem } = resolved.item;
       return {
-        ...resolved.item,
+        ...clientItem,
         productId: resolved.productRow?._id ?? resolved.item.productId,
         price: resolved.activePricePaise,
         // v2 commission fields
@@ -836,7 +878,6 @@ export const initCheckoutSessionInternal = internalMutation({
     return {
       checkoutSessionId,
       paymentId,
-      total: pricing.totalPayablePaise / 100,
       totalPaise: pricing.totalPayablePaise,
       // What the customer must actually pay after any exchange coupon. Zero
       // means the coupon covers the order outright — the client should skip
@@ -1023,9 +1064,9 @@ export async function verifyPaymentAndPlaceOrderInternal(
   const sellerTierKey = boutique?.pricingTier || "bronze";
   const pricing = calculateCheckoutPricing(
     session.items.map(item => ({
-      // Session item prices are rupees (createCheckoutSession contract); only sessions created
-      // before sellerBasePricePaise existed reach this fallback.
-      sellerBasePricePaise: item.sellerBasePricePaise ?? Math.round(item.price * 100),
+      // Session item prices are paise; only sessions created before
+      // sellerBasePricePaise existed reach this fallback.
+      sellerBasePricePaise: item.sellerBasePricePaise ?? item.price,
       quantity: item.quantity,
     })),
     session.deliveryFee ?? 0,
@@ -1847,10 +1888,16 @@ export const createCheckoutSession = action({
     deliverySlot: v.string(),
     paymentMethod: v.string(),
     items: v.array(cartItemArg),
-    subtotal: v.number(),
-    deliveryFee: v.number(),
-    discount: v.number(),
-    total: v.number(),
+    // Paise. The rupee fields are accepted only from checkout pages loaded
+    // before the switch to paise.
+    subtotalPaise: v.optional(v.number()),
+    deliveryFeePaise: v.optional(v.number()),
+    discountPaise: v.optional(v.number()),
+    totalPaise: v.optional(v.number()),
+    subtotal: v.optional(v.number()),
+    deliveryFee: v.optional(v.number()),
+    discount: v.optional(v.number()),
+    total: v.optional(v.number()),
     promoCode: v.optional(v.string()),
     /** Exchange store credit. Reduces what is charged, not the order's value. */
     couponCode: v.optional(v.string()),
@@ -1951,9 +1998,7 @@ export const createCheckoutSession = action({
         // Charge only what the customer still owes. The coupon-funded portion
         // is already in Hive's balance and must not be collected again.
         amount:
-          initResult.customerPayablePaise ??
-          initResult.totalPaise ??
-          Math.round(initResult.total * 100),
+          initResult.customerPayablePaise ?? initResult.totalPaise,
         currency: "INR",
         receipt: safeReceipt,
         notes: {

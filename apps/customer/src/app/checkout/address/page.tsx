@@ -333,10 +333,11 @@ export default function CheckoutAddressPage() {
   const rawSubtotal = orderItems.reduce((total, item) => total + item.price * item.quantity, 0);
 
   const itemsForPricing = useMemo(() => {
+    // The cart keeps rupees; the server works in paise, converted here once.
     return orderItems.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
-      price: item.price,
+      pricePaise: Math.round(item.price * 100),
       size: item.size,
     }));
   }, [orderItems]);

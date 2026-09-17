@@ -459,8 +459,8 @@ export const processPaymentCaptured = internalMutation({
     const platformConfig = await getPlatformConfigFn(ctx);
     const checkoutPricing = calculateCheckoutPricingFn(
       session.items.map((item: any) => ({
-        // Session item prices are rupees; see payments.ts placeOrderFromSession.
-        sellerBasePricePaise: item.sellerBasePricePaise ?? Math.round(item.price * 100),
+        // Session item prices are paise.
+        sellerBasePricePaise: item.sellerBasePricePaise ?? item.price,
         quantity: item.quantity,
       })),
       session.deliveryFee ?? 0,
@@ -506,7 +506,7 @@ export const processPaymentCaptured = internalMutation({
         userLat: session.addressSnapshot.lat,
         userLng: session.addressSnapshot.lng,
         boutiqueId,
-        subtotal: session.subtotal,
+        subtotalPaise: session.subtotal, // session totals are paise
       });
       if (resolvedQuote.serviceable) {
         quote = {

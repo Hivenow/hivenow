@@ -12,7 +12,6 @@ import { validateProductSizeAndStock, MOCK_INVENTORY } from "./lib/mockInventory
 import { internal, api } from "./_generated/api";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertExists } from "./lib/utils";
-import { calculateDeliveryQuoteAction } from "./routing";
 import { parseMoney, formatMoney } from "./lib/money";
 import { resolveManualPayoutPaise } from "./adminFinance";
 import { checkKillSwitch } from "./lib/killSwitches";
@@ -29,17 +28,6 @@ import {
   assertPorterAddressUsable,
 } from "./lib/porterAddress";
 // ─── Cart item input shape for order placement ────────────────────────────
-const cartItemArg = v.object({
-  productId:   v.string(),
-  name:        v.string(),
-  price:       v.number(),
-  imageUrl:    v.string(),
-  boutiqueName:v.string(),
-  size:        v.string(),
-  quantity:    v.number(),
-  isPreorder:  v.optional(v.boolean()),
-  scheduledProcessingDate: v.optional(v.string()),
-});
 
 // ─── Address snapshot shape (immutable at order time) ─────────────────────
 const addressSnapshotArg = v.object({
