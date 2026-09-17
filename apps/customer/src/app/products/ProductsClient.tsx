@@ -22,7 +22,6 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { QuickViewModal } from "@/components/product/QuickViewModal";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
-import { BoutiqueFilterBanner } from "@/components/catalog/BoutiqueFilterBanner";
 import { Compass } from "lucide-react";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { toQueryCoords } from "@/lib/distance";
@@ -437,18 +436,6 @@ function ProductsCatalog({
         activeCategorySlug={categorySlugFromUrl ?? undefined}
       />
 
-      {/* Designer exclusive collections banner */}
-      {boutiqueIdFromUrl && (
-        <BoutiqueFilterBanner
-          activeBoutique={activeBoutique}
-          onClear={() => {
-            const params = new URLSearchParams(window.location.search);
-            params.delete("boutiqueId");
-            router.push(`${window.location.pathname}?${params.toString()}`);
-          }}
-        />
-      )}
-
       {/* Browse-all banner */}
       {browseAll && (
         <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 w-full mt-3">
@@ -477,6 +464,16 @@ function ProductsCatalog({
           }}
           onClearFilters={clearFilters}
           filters={filters}
+          activeBoutiqueName={activeBoutique?.boutiqueName}
+          onClearBoutique={
+            boutiqueIdFromUrl
+              ? () => {
+                  const params = new URLSearchParams(window.location.search);
+                  params.delete("boutiqueId");
+                  router.push(`${window.location.pathname}?${params.toString()}`);
+                }
+              : undefined
+          }
           onToggleNewArrivals={() => {
             setFilters((prev) => ({
               ...prev,

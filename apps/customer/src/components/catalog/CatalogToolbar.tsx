@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { SlidersHorizontal, ChevronDown } from "lucide-react";
+import { SlidersHorizontal, ChevronDown, X } from "lucide-react";
 import { ProductSortOption } from "@/lib/catalogSort";
 import { SortDropdown } from "./CatalogSort";
 import { CatalogFilterState, PRICE_MIN, PRICE_MAX } from "@/lib/catalogFilters";
@@ -22,6 +22,8 @@ export interface CatalogToolbarProps {
   onClearFilters?: () => void;
   filters?: CatalogFilterState;
   onToggleNewArrivals?: () => void;
+  activeBoutiqueName?: string;
+  onClearBoutique?: () => void;
 }
 
 export const CatalogToolbar: React.FC<CatalogToolbarProps> = ({
@@ -33,6 +35,8 @@ export const CatalogToolbar: React.FC<CatalogToolbarProps> = ({
   onClearFilters,
   filters,
   onToggleNewArrivals,
+  activeBoutiqueName,
+  onClearBoutique,
 }) => {
   const isPriceActive =
     filters && (filters.minPrice > PRICE_MIN || filters.maxPrice < PRICE_MAX);
@@ -83,6 +87,19 @@ export const CatalogToolbar: React.FC<CatalogToolbarProps> = ({
       <div className="shrink-0">
         <SortDropdown value={sortOption} onChange={onChangeSort} />
       </div>
+
+      {/* Boutique Filter Capsule if scoped to a boutique */}
+      {activeBoutiqueName && onClearBoutique && (
+        <button
+          type="button"
+          onClick={onClearBoutique}
+          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-stone-900 border border-stone-900 text-white transition-all cursor-pointer hover:bg-stone-800 shadow-xs"
+          title={`Filter by ${activeBoutiqueName} (Click to remove)`}
+        >
+          <span>{activeBoutiqueName}</span>
+          <X className="w-3 h-3 text-stone-300 hover:text-white shrink-0" />
+        </button>
+      )}
 
       {/* 3. Quick Size Capsule */}
       <button
