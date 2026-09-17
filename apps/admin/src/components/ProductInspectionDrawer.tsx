@@ -195,8 +195,16 @@ export function ProductInspectionDrawer({
     });
   };
 
+  // The spec editor only knows the vertical's generic keys, while a category
+  // with its own attribute set stores other keys (e.g. Bedsheet: fabric,
+  // sheetType). Details are sent only once an admin edits a spec, and merged
+  // over the product's stored details, so approving never drops attributes
+  // the editor cannot show.
+  const [detailsDirty, setDetailsDirty] = useState(false);
+
   // Handle details specs change
   const handleDetailChange = (key: string, value: string) => {
+    setDetailsDirty(true);
     setDetails({
       ...details,
       [key]: value
@@ -207,14 +215,18 @@ export function ProductInspectionDrawer({
   const handleSave = async (silent = false) => {
     setSaving(true);
     try {
-      // Filter details map to non-empty fields and allowed vertical spec keys
-      const allowedKeys = new Set(verticalConfig.specKeys);
-      const cleanedDetails: Record<string, string> = {};
-      Object.entries(details).forEach(([k, v]) => {
-        if (allowedKeys.has(k as any) && v && v.trim()) {
-          cleanedDetails[k] = v.trim();
-        }
-      });
+      let cleanedDetails: Record<string, string> | undefined;
+      if (detailsDirty) {
+        // Stored details first, then the edited vertical specs on top.
+        const allowedKeys = new Set(verticalConfig.specKeys);
+        const merged: Record<string, string> = { ...(product?.details || {}) };
+        Object.entries(details).forEach(([k, v]) => {
+          if (!allowedKeys.has(k as any)) return;
+          if (v && v.trim()) merged[k] = v.trim();
+          else delete merged[k];
+        });
+        cleanedDetails = merged;
+      }
 
       await updateProductDetails({
         id: product._id,
