@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ShoppingBag, ArrowRight, Bell, AlertTriangle, CheckCircle, Info, Clock, Heart, Calendar } from "lucide-react";
+import { ShoppingBag, ArrowRight, Bell, AlertTriangle, Info, Clock, Heart, Calendar } from "lucide-react";
 import { cn } from "@hive/ui";
 import { ProductDetail } from "@/lib/mockProductDetails";
 import { useCartStore } from "@/store/cart-store";
@@ -15,7 +15,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Modal } from "@hive/ui";
 import { useSessionStore } from "@/context/SessionContext";
-import { inrToPaise } from "@hive/utils";
+import { inrToPaise, toast } from "@hive/utils";
 import { ReservationInfoBlock } from "./ReservationInfoBlock";
 
 function formatNextDayLabel(dateStr: string): string {
@@ -384,7 +384,6 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
   const [loading, setLoading] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState("");
   const [notifySuccess, setNotifySuccess] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "info" } | null>(null);
   const [crossBoutiqueModalOpen, setCrossBoutiqueModalOpen] = useState(false);
   const [duplicateReservationModalOpen, setDuplicateReservationModalOpen] = useState(false);
   const [itemOnHoldModalOpen, setItemOnHoldModalOpen] = useState(false);
@@ -483,12 +482,6 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       ? ("busy" as const)
       : ("open" as const);
 
-  const triggerToast = (message: string, type: "success" | "info" = "success") => {
-    setToast({ message, type });
-    setTimeout(() => {
-      setToast(null);
-    }, 3200);
-  };
 
   const handleClearAndContinue = async () => {
     setCrossBoutiqueModalOpen(false);
@@ -547,7 +540,6 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       scheduledProcessingDate: isPreorderMode ? (boutiqueStatus as any).nextOperatingDay : undefined,
     });
     setSidebarOpen(true);
-    triggerToast(`Switched bag to ${cleanProductTitle(product.name)}! Previous items saved to your Wishlist.`);
   };
 
   const handleSaveToWishlist = () => {
@@ -574,7 +566,6 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       }
       setCrossBoutiqueModalOpen(false);
       setSidebarOpen(true);
-      triggerToast(`Saved ${cleanProductTitle(product.name)} to Wishlist! Opening your current bag.`);
     }
   };
 
@@ -597,28 +588,31 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       imageUrl: product.images[0] || "",
       boutiqueName: product.boutique.name,
     });
-    triggerToast(
-      isFavorite ? "Removed from wishlist" : `Saved ${cleanProductTitle(product.name)} to wishlist`
-    );
+    if (isFavorite) {
+      toast.info("Removed from wishlist");
+    } else {
+      toast.success(`Saved ${cleanProductTitle(product.name)} to wishlist`);
+    }
   };
 
   const handleReserve = async () => {
     if (!isAuthenticated) {
-      triggerToast("Please log in to reserve an item.", "info");
+      toast.info("Please log in to reserve an item.");
       router.push(`/sign-in?redirect_url=/products/${product.slug}`);
       return;
     }
     if (latitude === null || longitude === null) {
-      triggerToast("Please select your delivery location to purchase.", "info");
+      toast.info("Please select your delivery location to purchase.");
       setGateOpen(true);
       return;
     }
     if (!selectedSize) {
-      triggerToast("Please select a size first", "info");
+      handleSelectSizePrompt();
+      toast.info("Please select a size first");
       return;
     }
     if (!isLocationServiceable) {
-      triggerToast("Currently unavailable at your location", "info");
+      toast.info("Currently unavailable at your location");
       return;
     }
 
@@ -637,7 +631,7 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
         size: selectedSize,
         quantity: 1,
       });
-      triggerToast("Reservation placed successfully!");
+      toast.success("Reservation placed successfully!");
 
       const clearCartZustand = useCartStore.getState().clearCart;
       clearCartZustand();
@@ -671,7 +665,7 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
         setItemOnHoldModalOpen(true);
       } else {
         const clean = rawMsg.split("ConvexError: ")[1] || rawMsg.split("Error: ")[1] || rawMsg;
-        triggerToast(clean, "info");
+        toast.info(clean);
       }
     } finally {
       setLoading(false);
@@ -680,23 +674,24 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
 
   const handleAddToCart = () => {
     if (latitude === null || longitude === null) {
-      triggerToast("Please select your delivery location to purchase.", "info");
+      toast.info("Please select your delivery location to purchase.");
       setGateOpen(true);
       return;
     }
 
     if (!selectedSize) {
-      triggerToast("Please select a size first", "info");
+      handleSelectSizePrompt();
+      toast.info("Please select a size first");
       return;
     }
 
     if (isStoreOffline) {
-      triggerToast("This boutique is currently closed or not accepting orders.", "info");
+      toast.info("This boutique is currently closed or not accepting orders.");
       return;
     }
 
     if (!isLocationServiceable) {
-      triggerToast("Currently unavailable at your location", "info");
+      toast.info("Currently unavailable at your location");
       return;
     }
 
@@ -727,31 +722,29 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       });
 
       setSidebarOpen(true);
-
-      console.log(`Add to bag: ${product.name} (Size: ${selectedSize})`);
-      triggerToast(`Added ${cleanProductTitle(product.name)} (Size ${selectedSize}) to your bag!`);
     }, 850);
   };
 
   const handleBuyNow = () => {
     if (latitude === null || longitude === null) {
-      triggerToast("Please select your delivery location to purchase.", "info");
+      toast.info("Please select your delivery location to purchase.");
       setGateOpen(true);
       return;
     }
 
     if (!selectedSize) {
-      triggerToast("Please select a size first", "info");
+      handleSelectSizePrompt();
+      toast.info("Please select a size first");
       return;
     }
 
     if (isStoreOffline) {
-      triggerToast("This boutique is currently closed or not accepting orders.", "info");
+      toast.info("This boutique is currently closed or not accepting orders.");
       return;
     }
 
     if (!isLocationServiceable) {
-      triggerToast("Currently unavailable at your location", "info");
+      toast.info("Currently unavailable at your location");
       return;
     }
 
@@ -777,7 +770,7 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
     e.preventDefault();
     if (!notifyEmail) return;
     setNotifySuccess(true);
-    triggerToast(`Got it! We will notify you at ${notifyEmail} once this size restocks.`, "success");
+    toast.success(`We will notify you at ${notifyEmail} once this size restocks.`);
     setTimeout(() => {
       setNotifyEmail("");
       setNotifySuccess(false);
@@ -1005,21 +998,6 @@ export const PurchaseActions: React.FC<PurchaseActionsProps> = ({
       {/* Sentinel for Scroll Observer */}
       <div className="w-full h-px pointer-events-none" />
 
-      {/* 4. Self-Contained Success/Feedback Toast */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[99999] max-w-md w-[90%] sm:w-auto bg-hive-dark/95 border border-stone-850/50 text-white rounded-full px-5 py-3.5 flex items-center gap-3 shadow-2xl animate-[toastInCenter_0.35s_cubic-bezier(0.16,1,0.3,1)_forwards]">
-          <div className={cn("w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0", toast.type === "success" ? "bg-green-500/25 text-green-400" : "bg-hive-gold/25 text-hive-gold")}>
-            {toast.type === "success" ? (
-              <CheckCircle className="w-3.5 h-3.5 stroke-[2.8]" />
-            ) : (
-              <Info className="w-3.5 h-3.5 stroke-[2.8]" />
-            )}
-          </div>
-          <span className="text-xs font-semibold text-white/95 leading-none tracking-wide pr-1 select-none">
-            {toast.message}
-          </span>
-        </div>
-      )}
 
       {/* 5. Sticky Mobile purchase bar */}
       <StickyMobilePurchaseBar

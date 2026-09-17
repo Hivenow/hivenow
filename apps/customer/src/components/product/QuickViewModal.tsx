@@ -327,7 +327,6 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
       scheduledProcessingDate: isPreorderMode ? (boutiqueStatus as any).nextOperatingDay : undefined,
     });
     setSidebarOpen(true);
-    toast.success(`Switched bag to ${displayProduct.name}! Previous item saved to your Wishlist.`);
     onClose();
   };
 
@@ -354,7 +353,6 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
       }
       setCrossBoutiqueModalOpen(false);
       setSidebarOpen(true);
-      toast.success(`Saved ${displayProduct.name} to Wishlist! Opening your current bag.`);
       onClose();
     }
   };
@@ -395,7 +393,6 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
         scheduledProcessingDate: isPreorderMode ? (boutiqueStatus as any).nextOperatingDay : undefined,
       });
       setAdding(false);
-      toast.success("Added to Bag!");
       setSidebarOpen(true);
       onClose();
     }, 600);
