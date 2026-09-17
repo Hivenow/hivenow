@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Tag, Package, ClipboardList, User, LogOut, Loader2, Wallet, Star, Plus } from "lucide-react";
+import { Home, Tag, Package, ClipboardList, User, LogOut, Loader2, Wallet, Star, Plus, TicketPercent } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button, LoadingState } from "@hive/ui";
@@ -17,6 +17,7 @@ const BOUTIQUE_NAV_ITEMS = [
   { label: "Stock", href: "/boutique/inventory", icon: Package },
   { label: "Orders", href: "/boutique/orders", icon: ClipboardList },
   { label: "Reviews", href: "/boutique/reviews", icon: Star },
+  { label: "Coupons", href: "/boutique/coupons", icon: TicketPercent },
   { label: "Money", href: "/boutique/finance", icon: Wallet },
   { label: "More", href: "/boutique/profile", icon: User },
 ];
@@ -273,12 +274,12 @@ export default function BoutiqueLayout({ children }: { children: React.ReactNode
           <Link 
             href="/boutique/profile"
             className={`flex flex-col items-center justify-center w-full h-full pt-1 transition-all duration-150 relative ${
-              pathname === "/boutique/profile" || pathname.includes("/reviews") || pathname.includes("/finance") ? "text-slate-900 font-bold" : "text-slate-400"
+              pathname === "/boutique/profile" || pathname.includes("/reviews") || pathname.includes("/coupons") || pathname.includes("/finance") ? "text-slate-900 font-bold" : "text-slate-400"
             }`}
           >
             <User className="w-5 h-5" />
             <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">Account</span>
-            {(pathname === "/boutique/profile" || pathname.includes("/reviews") || pathname.includes("/finance")) && (
+            {(pathname === "/boutique/profile" || pathname.includes("/reviews") || pathname.includes("/coupons") || pathname.includes("/finance")) && (
               <span className="w-1 h-1 rounded-full bg-[#E9B929] mt-0.5" />
             )}
           </Link>

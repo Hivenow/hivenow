@@ -12,6 +12,7 @@ import { incrementBoutiqueOrderCount } from "../lib/boutiqueCounters";
 import { restoreCheckoutSessionStock } from "../lib/inventory";
 import { resolveOrderReturnsAccepted, resolveOrderExchangesAccepted } from "../lib/returnPolicy";
 import { applyCouponToOrder } from "../coupons";
+import { recordPromoCouponUsageHelper } from "../promoCoupons";
 
 // ─── HMAC-SHA256 Signature Verification ──────────────────────────────────────
 async function verifyRazorpayWebhookSignature(
@@ -410,7 +411,8 @@ export const processPaymentCaptured = internalMutation({
       session.deliveryFee ?? 0,
       session.discount ?? 0,
       sellerTierKey,
-      platformConfig
+      platformConfig,
+      session.promoSellerFundedDiscountPaise ?? 0
     );
 
     const pricingSnapshot = {
@@ -420,6 +422,8 @@ export const processPaymentCaptured = internalMutation({
       platformChargesGstPaise: checkoutPricing.platformChargesGstPaise,
       deliveryFeePaise: checkoutPricing.deliveryFeePaise,
       discountPaise: checkoutPricing.discountPaise,
+      sellerFundedDiscountPaise: checkoutPricing.sellerFundedDiscountPaise,
+      platformFundedDiscountPaise: checkoutPricing.platformFundedDiscountPaise,
       totalPayablePaise: checkoutPricing.totalPayablePaise,
       sellerTierKey: checkoutPricing.sellerTierKey,
       sellerTierName: checkoutPricing.sellerTierName,
@@ -671,6 +675,18 @@ export const processPaymentCaptured = internalMutation({
     // Consume any exchange coupon that funded this order, and refund the
     // remainder if the new order came in under the credit's value.
     await applyCouponToOrder(ctx, session, orderId, payment.amount ?? 0, now);
+
+    // Count the promo redemption here too; this path places the order when the
+    // client never came back to verify, and the usage limit must still hold.
+    if (session.promoCouponId) {
+      await recordPromoCouponUsageHelper(ctx, {
+        promoCouponId: session.promoCouponId,
+        userId: session.userId,
+        orderId,
+        orderNumber,
+        discountAppliedPaise: session.promoCouponDiscountPaise ?? (session.discount || 0),
+      });
+    }
 
     // v3: create the seller's Route transfer now, held indefinitely
     // (on_hold=true, no on_hold_until). The money is frozen in the seller's

@@ -5,7 +5,7 @@
 import { mutation, query, internalMutation, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
-import { requireRole, getAuthenticatedUser } from "./lib/auth";
+import { requireRole, getAuthenticatedUser, getMyBoutique } from "./lib/auth";
 
 // ─── Discount math (shared) ─────────────────────────────────────────────────
 
@@ -30,6 +30,25 @@ export function computePromoDiscountPaise(
   return Math.min(coupon.discountValue, productSubtotalPaise);
 }
 
+/** Normalises a new coupon code and rejects reserved or duplicate codes. */
+async function claimCouponCode(ctx: MutationCtx, rawCode: string): Promise<string> {
+  const code = rawCode.trim().toUpperCase().replace(/[^A-Z0-9\-_]/g, "");
+  if (!code || code.length < 3) {
+    throw new ConvexError("Coupon code must be at least 3 characters (A-Z, 0-9, dash, underscore).");
+  }
+  if (code.startsWith("HIVE-")) {
+    throw new ConvexError("Codes starting with HIVE- are reserved for exchange coupons.");
+  }
+  const existing = await ctx.db
+    .query("promoCoupons")
+    .withIndex("by_code", (q) => q.eq("code", code))
+    .first();
+  if (existing) {
+    throw new ConvexError(`Coupon code "${code}" already exists.`);
+  }
+  return code;
+}
+
 // ─── Admin: Create ──────────────────────────────────────────────────────────
 
 export const createPromoCoupon = mutation({
@@ -50,23 +69,7 @@ export const createPromoCoupon = mutation({
   handler: async (ctx, args) => {
     const admin = await requireRole(ctx, "admin");
     const now = Date.now();
-
-    const code = args.code.trim().toUpperCase().replace(/[^A-Z0-9\-_]/g, "");
-    if (!code || code.length < 3) {
-      throw new ConvexError("Coupon code must be at least 3 characters (A-Z, 0-9, dash, underscore).");
-    }
-    if (code.startsWith("HIVE-")) {
-      throw new ConvexError("Codes starting with HIVE- are reserved for exchange coupons.");
-    }
-
-    // Check uniqueness
-    const existing = await ctx.db
-      .query("promoCoupons")
-      .withIndex("by_code", (q) => q.eq("code", code))
-      .first();
-    if (existing) {
-      throw new ConvexError(`Coupon code "${code}" already exists.`);
-    }
+    const code = await claimCouponCode(ctx, args.code);
 
     if (args.scope === "boutique" && !args.boutiqueId) {
       throw new ConvexError("Boutique ID is required for boutique-scoped coupons.");
@@ -90,6 +93,8 @@ export const createPromoCoupon = mutation({
       usedCount: 0,
       scope: args.scope,
       boutiqueId: args.scope === "boutique" ? args.boutiqueId : undefined,
+      // Admin-created coupons are Hive's marketing spend; the seller is paid in full.
+      fundedBy: "platform",
       status: "active",
       startsAt: args.startsAt,
       expiresAt: args.expiresAt,
@@ -125,6 +130,13 @@ export const updatePromoCoupon = mutation({
 
     const coupon = await ctx.db.get(args.couponId);
     if (!coupon) throw new ConvexError("Coupon not found.");
+    if (
+      coupon.fundedBy === "seller" &&
+      ((args.scope !== undefined && args.scope !== "boutique") ||
+        (args.boutiqueId !== undefined && args.boutiqueId !== coupon.boutiqueId))
+    ) {
+      throw new ConvexError("A seller-funded coupon can only apply to the seller's own store.");
+    }
 
     const patch: any = { updatedAt: Date.now() };
     if (args.description !== undefined) patch.description = args.description.trim();
@@ -200,6 +212,7 @@ export const listPromoCouponsAdmin = query({
           scope: c.scope,
           boutiqueId: c.boutiqueId,
           boutiqueName: boutique?.boutiqueName || boutique?.name || null,
+          fundedBy: c.fundedBy ?? "platform",
           status: c.status,
           startsAt: c.startsAt,
           expiresAt: c.expiresAt,
@@ -277,6 +290,144 @@ export const getPromoCouponStatsAdmin = query({
         (c) => c.expiresAt && c.expiresAt > now && c.expiresAt - now < sevenDays
       ).length,
     };
+  },
+});
+
+// ─── Seller: own coupons (seller-funded) ────────────────────────────────────
+//
+// A coupon a boutique creates is paid for by that boutique: the discount comes
+// out of its payout, and Hive's commission is charged on the discounted price.
+// It only ever applies to the boutique's own items.
+
+const SELLER_MAX_PERCENT = 50;
+const SELLER_MIN_FIXED_PAISE = 1000; // ₹10
+const SELLER_MAX_FIXED_PAISE = 500000; // ₹5,000
+const SELLER_MAX_USAGE_LIMIT = 10000;
+
+export const listMyPromoCoupons = query({
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const boutique = await getMyBoutique(ctx, args.token, true);
+    const coupons = await ctx.db
+      .query("promoCoupons")
+      .withIndex("by_boutiqueId", (q) => q.eq("boutiqueId", boutique._id))
+      .collect();
+
+    const rows = await Promise.all(
+      coupons.map(async (c) => {
+        const usages = await ctx.db
+          .query("promoCouponUsages")
+          .withIndex("by_promoCouponId", (q) => q.eq("promoCouponId", c._id))
+          .collect();
+        return {
+          _id: c._id,
+          code: c.code,
+          discountType: c.discountType,
+          discountValue: c.discountValue,
+          minOrderPaise: c.minOrderPaise,
+          maxDiscountPaise: c.maxDiscountPaise,
+          usageLimit: c.usageLimit,
+          perUserLimit: c.perUserLimit,
+          usedCount: c.usedCount,
+          status: c.status,
+          startsAt: c.startsAt,
+          expiresAt: c.expiresAt,
+          createdAt: c.createdAt,
+          fundedBy: c.fundedBy ?? "platform",
+          totalDiscountGivenPaise: usages.reduce((sum, u) => sum + u.discountAppliedPaise, 0),
+        };
+      })
+    );
+    rows.sort((a, b) => b.createdAt - a.createdAt);
+    return rows;
+  },
+});
+
+export const createMyPromoCoupon = mutation({
+  args: {
+    code: v.string(),
+    discountType: v.union(v.literal("percentage"), v.literal("fixed")),
+    discountValue: v.number(),
+    minOrderPaise: v.number(),
+    maxDiscountPaise: v.optional(v.number()),
+    usageLimit: v.number(),
+    perUserLimit: v.number(),
+    startsAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()),
+    token: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx, args.token);
+    const boutique = await getMyBoutique(ctx, args.token);
+    const now = Date.now();
+
+    if (args.discountType === "percentage") {
+      if (!Number.isInteger(args.discountValue) || args.discountValue < 1 || args.discountValue > SELLER_MAX_PERCENT) {
+        throw new ConvexError(`Percentage off must be a whole number from 1 to ${SELLER_MAX_PERCENT}.`);
+      }
+    } else if (
+      !Number.isInteger(args.discountValue) ||
+      args.discountValue < SELLER_MIN_FIXED_PAISE ||
+      args.discountValue > SELLER_MAX_FIXED_PAISE
+    ) {
+      throw new ConvexError("Flat discount must be between ₹10 and ₹5,000.");
+    }
+    if (args.maxDiscountPaise !== undefined && args.maxDiscountPaise < 100) {
+      throw new ConvexError("Maximum discount must be at least ₹1.");
+    }
+    if (!Number.isInteger(args.minOrderPaise) || args.minOrderPaise < 0) {
+      throw new ConvexError("Minimum order can't be negative.");
+    }
+    if (!Number.isInteger(args.usageLimit) || args.usageLimit < 1 || args.usageLimit > SELLER_MAX_USAGE_LIMIT) {
+      throw new ConvexError(`Total uses must be between 1 and ${SELLER_MAX_USAGE_LIMIT.toLocaleString("en-IN")}.`);
+    }
+    if (!Number.isInteger(args.perUserLimit) || args.perUserLimit < 1) {
+      throw new ConvexError("Uses per customer must be at least 1.");
+    }
+    if (args.expiresAt !== undefined && args.expiresAt <= (args.startsAt ?? now)) {
+      throw new ConvexError("End date must be after the start date.");
+    }
+
+    const code = await claimCouponCode(ctx, args.code);
+    const couponId = await ctx.db.insert("promoCoupons", {
+      code,
+      description: `Created by ${boutique.boutiqueName || boutique.name || "seller"}`,
+      discountType: args.discountType,
+      discountValue: args.discountValue,
+      minOrderPaise: args.minOrderPaise,
+      maxDiscountPaise: args.discountType === "percentage" ? args.maxDiscountPaise : undefined,
+      usageLimit: args.usageLimit,
+      perUserLimit: args.perUserLimit,
+      usedCount: 0,
+      scope: "boutique",
+      boutiqueId: boutique._id,
+      fundedBy: "seller",
+      status: "active",
+      startsAt: args.startsAt,
+      expiresAt: args.expiresAt,
+      createdBy: user._id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { success: true, couponId, code };
+  },
+});
+
+export const toggleMyPromoCouponStatus = mutation({
+  args: { couponId: v.id("promoCoupons"), token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const boutique = await getMyBoutique(ctx, args.token);
+    const coupon = await ctx.db.get(args.couponId);
+    // Sellers manage only coupons they pay for; Hive-funded ones stay with admin.
+    if (!coupon || coupon.boutiqueId !== boutique._id || coupon.fundedBy !== "seller") {
+      throw new ConvexError("Coupon not found.");
+    }
+    if (coupon.status === "expired") {
+      throw new ConvexError("This coupon has expired. Create a new one instead.");
+    }
+    const newStatus = coupon.status === "active" ? "paused" : "active";
+    await ctx.db.patch(args.couponId, { status: newStatus, updatedAt: Date.now() });
+    return { success: true, newStatus };
   },
 });
 
@@ -380,6 +531,7 @@ export const validatePromoCode = query({
       discountLabel,
       discountType: coupon.discountType,
       discountValue: coupon.discountValue,
+      fundedBy: coupon.fundedBy ?? "platform",
       message: `${code} applied! You save ₹${(discountPaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}.`,
     };
   },

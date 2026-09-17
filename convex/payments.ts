@@ -184,10 +184,12 @@ export const getCheckoutPricing = query({
         ) * item.quantity, 0);
 
       let discountPaise = 0;
+      let sellerFundedDiscountPaise = 0;
       if (args.promoCouponId) {
         const promoCoupon = await ctx.db.get(args.promoCouponId);
         if (promoCoupon && promoCoupon.status === "active") {
           discountPaise = computePromoDiscountPaise(promoCoupon, allInclusiveSubtotalPaise);
+          if (promoCoupon.fundedBy === "seller") sellerFundedDiscountPaise = discountPaise;
         }
       } else if (args.promoCode === "WELCOME10") {
         discountPaise = Math.round(allInclusiveSubtotalPaise * 0.10);
@@ -214,7 +216,8 @@ export const getCheckoutPricing = query({
         deliveryFeePaise,
         discountPaise,
         sellerTierKey,
-        platformConfig
+        platformConfig,
+        sellerFundedDiscountPaise
       );
 
       return {
@@ -594,6 +597,7 @@ export const initCheckoutSessionInternal = internalMutation({
     // Computed in paise on the server's own all-inclusive subtotal. The client's
     // figure is only checked against it; the server figure is what gets charged.
     let expectedDiscountPaise = 0;
+    let sellerFundedDiscountPaise = 0;
     if (args.promoCouponId) {
       const promoCoupon = await ctx.db.get(args.promoCouponId);
       if (!promoCoupon || promoCoupon.status !== "active") {
@@ -629,6 +633,13 @@ export const initCheckoutSessionInternal = internalMutation({
         throw new ConvexError(`Minimum order of ₹${(promoCoupon.minOrderPaise / 100).toFixed(0)} required for this coupon.`);
       }
       expectedDiscountPaise = computePromoDiscountPaise(promoCoupon, chargedSubtotalPaise);
+      if (promoCoupon.fundedBy === "seller") {
+        // A seller can only fund a discount on its own items.
+        if (String(promoCoupon.boutiqueId) !== String(primaryBoutiqueId)) {
+          throw new ConvexError("This coupon is only valid for a specific boutique.");
+        }
+        sellerFundedDiscountPaise = expectedDiscountPaise;
+      }
       validatedPromoCouponId = promoCoupon._id;
       validatedPromoCouponDiscountPaise = expectedDiscountPaise;
     } else if (cleanPromoCode === "WELCOME10") {
@@ -674,7 +685,8 @@ export const initCheckoutSessionInternal = internalMutation({
       deliveryFeePaise,
       discountPaise,
       sellerTierKey,
-      platformConfig
+      platformConfig,
+      sellerFundedDiscountPaise
     );
 
     // Server-calculated total is authoritative. Verify client total is within tolerance.
@@ -815,6 +827,7 @@ export const initCheckoutSessionInternal = internalMutation({
       promoCode: args.promoCode,
       promoCouponId: validatedPromoCouponId,
       promoCouponDiscountPaise: validatedPromoCouponDiscountPaise || undefined,
+      promoSellerFundedDiscountPaise: pricing.sellerFundedDiscountPaise || undefined,
       couponId: appliedCoupon?.couponId,
       couponAppliedPaise: appliedCoupon?.couponAppliedPaise,
       customerPayablePaise,
@@ -1048,7 +1061,8 @@ export async function verifyPaymentAndPlaceOrderInternal(
     session.deliveryFee ?? 0,
     session.discount ?? 0,
     sellerTierKey,
-    platformConfig
+    platformConfig,
+    session.promoSellerFundedDiscountPaise ?? 0
   );
 
   const platformCommissionAmount = pricing.sellerCommissionPaise;
@@ -1063,6 +1077,8 @@ export async function verifyPaymentAndPlaceOrderInternal(
     platformChargesGstPaise: pricing.platformChargesGstPaise,
     deliveryFeePaise: pricing.deliveryFeePaise,
     discountPaise: pricing.discountPaise,
+    sellerFundedDiscountPaise: pricing.sellerFundedDiscountPaise,
+    platformFundedDiscountPaise: pricing.platformFundedDiscountPaise,
     totalPayablePaise: pricing.totalPayablePaise,
     sellerTierKey: pricing.sellerTierKey,
     sellerTierName: pricing.sellerTierName,

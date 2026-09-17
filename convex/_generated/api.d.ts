@@ -171,6 +171,7 @@ import type * as tests_porterAddressTest from "../tests/porterAddressTest.js";
 import type * as tests_porterBookingTest from "../tests/porterBookingTest.js";
 import type * as tests_priceFilterTest from "../tests/priceFilterTest.js";
 import type * as tests_productSearchTest from "../tests/productSearchTest.js";
+import type * as tests_promoFundingTest from "../tests/promoFundingTest.js";
 import type * as tests_rateLimitGeocode from "../tests/rateLimitGeocode.js";
 import type * as tests_rateLimitTtlTest from "../tests/rateLimitTtlTest.js";
 import type * as tests_retryPayment from "../tests/retryPayment.js";
@@ -372,6 +373,7 @@ declare const fullApi: ApiFromModules<{
   "tests/porterBookingTest": typeof tests_porterBookingTest;
   "tests/priceFilterTest": typeof tests_priceFilterTest;
   "tests/productSearchTest": typeof tests_productSearchTest;
+  "tests/promoFundingTest": typeof tests_promoFundingTest;
   "tests/rateLimitGeocode": typeof tests_rateLimitGeocode;
   "tests/rateLimitTtlTest": typeof tests_rateLimitTtlTest;
   "tests/retryPayment": typeof tests_retryPayment;

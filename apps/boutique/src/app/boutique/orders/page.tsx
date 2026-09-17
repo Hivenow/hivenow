@@ -464,7 +464,11 @@ export default function BoutiqueOrders() {
                           <span className="text-sm font-bold text-slate-900">
                             ₹{Math.round((order.totalPayout ?? order.orderSnapshot?.merchantPayable ?? (order.total * 0.98)) / 100).toLocaleString("en-IN")}
                           </span>
-                          <span className="text-[10px] font-normal text-slate-400">Net earnings</span>
+                          <span className="text-[10px] font-normal text-slate-400">
+                            {order.sellerFundedDiscountPaise > 0
+                              ? `After your coupon (−₹${(order.sellerFundedDiscountPaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })})`
+                              : "Net earnings"}
+                          </span>
                         </div>
                       </td>
 

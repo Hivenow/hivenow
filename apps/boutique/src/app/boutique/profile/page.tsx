@@ -6,7 +6,7 @@ import { useSellerAuth } from "@/context/SellerAuthContext";
 import { api } from "../../../../../../convex/_generated/api";
 import { Button, Card, CardContent, cn, LoadingState } from "@hive/ui";
 import Link from "next/link";
-import { Loader2, Store, Phone, Mail, MapPin, Shield, CheckCircle2, UploadCloud, LogOut, Star, Wallet, ChevronRight, ShieldCheck, Lock, Repeat, Volume2 } from "lucide-react";
+import { Loader2, Store, Phone, Mail, MapPin, Shield, CheckCircle2, UploadCloud, LogOut, Star, Wallet, ChevronRight, ShieldCheck, Lock, Repeat, Volume2, TicketPercent } from "lucide-react";
 import { toast } from "@hive/utils";
 import Cropper from "react-easy-crop";
 import { Modal } from "@hive/ui";
@@ -373,6 +373,22 @@ export default function BoutiqueProfile() {
             <div className="flex flex-col">
               <span className="text-xs font-bold text-slate-900 group-hover:text-slate-900">Customer Reviews & Ratings</span>
               <span className="text-[11px] text-slate-500 font-medium">View product ratings & reply to buyers</span>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-900 transition-colors" />
+        </Link>
+
+        <Link
+          href="/boutique/coupons"
+          className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:border-slate-900 transition-all flex items-center justify-between group cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-700">
+              <TicketPercent className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-slate-900 group-hover:text-slate-900">Coupons</span>
+              <span className="text-[11px] text-slate-500 font-medium">Create discount codes for your store</span>
             </div>
           </div>
           <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-900 transition-colors" />

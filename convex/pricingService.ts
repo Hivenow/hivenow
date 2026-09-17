@@ -54,6 +54,10 @@ export interface CheckoutPricing {
   deliveryFeePaise: number;
   // Discount
   discountPaise: number;
+  /** Part of discountPaise taken out of the seller's payout (seller-created coupon). */
+  sellerFundedDiscountPaise: number;
+  /** Part of discountPaise Hive pays for. discountPaise = seller + platform funded. */
+  platformFundedDiscountPaise: number;
   // Total
   totalPayablePaise: number;
   // Seller settlement
@@ -435,13 +439,20 @@ export function calculateAllInclusivePrice(
  * @param discountPaise - Coupon/promo discount amount
  * @param sellerTierKey - The seller's pricing tier key
  * @param config - Platform config
+ * @param sellerFundedDiscountPaise - How much of discountPaise the seller pays
+ *   for (a coupon the seller created). It is spread across items by their
+ *   all-inclusive line totals and lowers each item's base price before
+ *   commission, so Hive's commission is charged on the price after discount.
+ *   Whatever the seller does not absorb (rounding, or a discount larger than
+ *   the base price) is paid by Hive.
  */
 export function calculateCheckoutPricing(
   items: Array<{ sellerBasePricePaise: number; quantity: number }>,
   deliveryFeePaise: number,
   discountPaise: number,
   sellerTierKey: string | undefined,
-  config: PlatformConfig
+  config: PlatformConfig,
+  sellerFundedDiscountPaise: number = 0
 ): CheckoutPricing {
   const tier = resolveTierConfig(sellerTierKey, config);
   const charges = calculateTierPlatformCharges(sellerTierKey, config);
@@ -459,8 +470,26 @@ export function calculateCheckoutPricing(
   let primarySlabMaxPrice: number | null | undefined = undefined;
   let primaryCommissionPercent = 0;
 
-  for (const item of items) {
-    const itemPricing = calculateSellerItemPricing(item.sellerBasePricePaise, sellerTierKey, config);
+  const sellerFundedTarget = Math.max(0, Math.min(Math.round(sellerFundedDiscountPaise), discountPaise));
+  const lineTotals = items.map(
+    (item) => calculateAllInclusivePricePaise(item.sellerBasePricePaise, sellerTierKey, config) * item.quantity
+  );
+  let unallocated = sellerFundedTarget;
+  let sellerAbsorbedPaise = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    // Share of the seller-funded discount for this line; the last line takes the remainder.
+    const lineShare = i === items.length - 1 || productSubtotalPaise === 0
+      ? unallocated
+      : Math.floor((sellerFundedTarget * lineTotals[i]!) / productSubtotalPaise);
+    unallocated -= lineShare;
+    // Floor so the seller is never charged more than their share.
+    const unitDiscount = item.quantity > 0 ? Math.floor(lineShare / item.quantity) : 0;
+    const effectiveBasePaise = Math.max(0, item.sellerBasePricePaise - unitDiscount);
+    sellerAbsorbedPaise += (item.sellerBasePricePaise - effectiveBasePaise) * item.quantity;
+
+    const itemPricing = calculateSellerItemPricing(effectiveBasePaise, sellerTierKey, config);
     totalSellerCommissionPaise += itemPricing.sellerCommissionPaise * item.quantity;
     totalSellerCommissionGstPaise += itemPricing.sellerCommissionGstPaise * item.quantity;
     totalSellerPayoutPaise += itemPricing.sellerPayoutPaise * item.quantity;
@@ -484,6 +513,8 @@ export function calculateCheckoutPricing(
     platformChargesGstPaise: charges.platformChargesGstPaise,
     deliveryFeePaise,
     discountPaise,
+    sellerFundedDiscountPaise: Math.min(sellerAbsorbedPaise, discountPaise),
+    platformFundedDiscountPaise: discountPaise - Math.min(sellerAbsorbedPaise, discountPaise),
     totalPayablePaise,
     sellerTierKey: tier.key,
     sellerTierName: tier.name,

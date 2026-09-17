@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { EmptyCartState } from "@/components/cart/EmptyCartState";
-import { ArrowRight, Ticket, Check, AlertCircle, Sparkles, Loader2, X, Zap } from "lucide-react";
+import { ArrowRight, Ticket, AlertCircle, Sparkles, Loader2, X, Zap } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { CartItemComponent } from "@/components/cart/CartItem";
 import { useQuery, useMutation, useConvex } from "convex/react";
@@ -15,7 +15,7 @@ import { useConvexMutation } from "@/hooks/useConvexMutation";
 import { useCheckoutStore } from "@/store/checkout-store";
 import { Modal } from "@hive/ui";
 import { FirebaseAuthCard } from "@/components/auth/FirebaseAuthCard";
-import { PromoCouponCelebration } from "@/components/checkout/PromoCouponCelebration";
+import { AppliedCouponCard } from "@/components/checkout/AppliedCouponCard";
 
 export default function CartPage() {
   const router = useRouter();
@@ -108,9 +108,7 @@ export default function CartPage() {
   const activePromo = useCheckoutStore((state) => state.appliedPromo);
   const setAppliedPromo = useCheckoutStore((state) => state.setAppliedPromo);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [promoSuccessMsg, setPromoSuccessMsg] = useState<string | null>(null);
   const [promoValidating, setPromoValidating] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<{ code: string; savingsRupees: number } | null>(null);
   const convex = useConvex();
 
   // Hydration delay protection
@@ -136,7 +134,6 @@ export default function CartPage() {
   const handleApplyPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     setPromoError(null);
-    setPromoSuccessMsg(null);
     const code = promoInput.trim().toUpperCase();
 
     if (!code) return;
@@ -161,10 +158,7 @@ export default function CartPage() {
 
       const discountRupees = result.discountPaise / 100;
       setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
-      setPromoSuccessMsg(result.message);
       setPromoInput("");
-      // Show celebration popup
-      setCelebrationData({ code, savingsRupees: discountRupees });
     } catch (err: any) {
       setPromoError(err?.message || "Couldn't validate that code. Try again.");
     } finally {
@@ -174,7 +168,6 @@ export default function CartPage() {
 
   const handleRemovePromo = () => {
     setAppliedPromo(null, 0, null, 0);
-    setPromoSuccessMsg(null);
     setPromoError(null);
   };
 
@@ -293,21 +286,8 @@ export default function CartPage() {
                       </form>
                     )
                   ) : (
-                    <div className="flex items-center justify-between bg-green-50 border border-green-200 px-3 py-1.5 rounded-xl mt-1">
-                      <div className="flex flex-col text-left">
-                        <span className="text-[10px] font-extrabold text-green-800 flex items-center gap-1 uppercase">
-                          <Check className="w-3 h-3 stroke-[2.5]" />
-                        {activePromo}
-                      </span>
-                      <span className="text-[8px] text-green-700 font-medium">Discount Applied</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleRemovePromo}
-                        className="text-[9px] font-extrabold uppercase tracking-wide text-red-500 hover:text-red-700 bg-transparent hover:bg-red-50/50 px-1.5 py-0.5 rounded transition-all"
-                      >
-                        Remove
-                      </button>
+                    <div className="mt-1">
+                      <AppliedCouponCard code={activePromo} savingsRupees={discountAmount} onRemove={handleRemovePromo} />
                     </div>
                   )}
 
@@ -316,11 +296,6 @@ export default function CartPage() {
                     <div className="flex items-center gap-1.5 text-[9px] font-bold text-red-600 mt-1.5 bg-red-50/50 border border-red-200/50 px-2 py-1 rounded-lg">
                       <AlertCircle className="w-3 h-3 flex-shrink-0" />
                       <span>{promoError}</span>
-                    </div>
-                  )}
-                  {promoSuccessMsg && (
-                    <div className="flex items-center gap-1.5 text-[9px] font-bold text-green-700 mt-1.5 bg-green-50/20 border border-green-100/50 px-2 py-1 rounded-lg">
-                      <span>{promoSuccessMsg}</span>
                     </div>
                   )}
                 </div>
@@ -406,14 +381,6 @@ export default function CartPage() {
         </div>
       </Modal>
 
-      {/* Promo Coupon Celebration Popup */}
-      {celebrationData && (
-        <PromoCouponCelebration
-          code={celebrationData.code}
-          savingsRupees={celebrationData.savingsRupees}
-          onDismiss={() => setCelebrationData(null)}
-        />
-      )}
     </div>
   );
 }

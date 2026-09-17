@@ -368,6 +368,9 @@ export default function AdminPromoCouponsPage() {
                           <><Store className="w-2.5 h-2.5" /> {coupon.boutiqueName || "Boutique"}</>
                         )}
                       </span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {coupon.fundedBy === "seller" ? "Seller pays" : "Hive pays"}
+                      </p>
                     </td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${statusStyles[coupon.status] || ""}`}>
@@ -588,6 +591,10 @@ export default function AdminPromoCouponsPage() {
                     </div>
                   )}
                 </div>
+                <p className="text-[11px] text-slate-500">
+                  Hive pays for coupons created here; the seller still gets their full payout.
+                  Sellers create coupons they pay for themselves in the Partners portal.
+                </p>
               </div>
 
               {/* Schedule */}

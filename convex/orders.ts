@@ -1069,7 +1069,10 @@ export const getBoutiqueOrders = query({
           deliveredAt: returnShipment.deliveredAt ?? null,
         } : null,
         totalBasePrice,
-        totalPayout,
+        // The frozen snapshot is what the seller is actually transferred; it
+        // already has any seller-funded coupon discount taken out.
+        totalPayout: order.pricingSnapshot?.sellerPayoutPaise ?? totalPayout,
+        sellerFundedDiscountPaise: order.pricingSnapshot?.sellerFundedDiscountPaise ?? 0,
         acceptanceActivity: activity ? {
           actorName: activity.actorName,
           actorEmail: activity.actorEmail,

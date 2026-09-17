@@ -852,6 +852,9 @@ export default defineSchema({
       platformChargesGstPaise: v.number(),  // GST on (handling + platform fee)
       deliveryFeePaise: v.number(),
       discountPaise: v.number(),
+      // Who paid for discountPaise. Missing on orders before seller-funded coupons: all Hive.
+      sellerFundedDiscountPaise: v.optional(v.number()),
+      platformFundedDiscountPaise: v.optional(v.number()),
       totalPayablePaise: v.number(),
       sellerTierKey: v.string(),
       sellerTierName: v.string(),
@@ -1329,6 +1332,8 @@ export default defineSchema({
     // Admin promo coupon applied to this checkout (from promoCoupons table).
     promoCouponId:        v.optional(v.id("promoCoupons")),
     promoCouponDiscountPaise: v.optional(v.number()),
+    // Part of the promo discount the seller pays for (seller-created coupon).
+    promoSellerFundedDiscountPaise: v.optional(v.number()),
     customerPayablePaise: v.optional(v.number()),
     razorpayOrderId: v.string(),
     status:          v.union(
@@ -2889,6 +2894,10 @@ export default defineSchema({
                         v.literal("boutique")         // Only at a specific boutique
                       ),
     boutiqueId:       v.optional(v.id("boutiques")),  // Required when scope = "boutique"
+    // Who pays the discount. "seller": created by the boutique in the partner
+    // portal, taken out of its payout. "platform" (or missing): created by an
+    // admin, paid by Hive.
+    fundedBy:         v.optional(v.union(v.literal("platform"), v.literal("seller"))),
     status:           v.union(
                         v.literal("active"),
                         v.literal("paused"),

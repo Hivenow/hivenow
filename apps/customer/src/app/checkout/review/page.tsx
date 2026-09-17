@@ -29,7 +29,7 @@ import { getEffectiveCheckoutItems } from "@/lib/getEffectiveCheckoutItems";
 import { useSessionStore } from "@/context/SessionContext";
 import { CustomerPriceBreakdown } from "@/components/checkout/CustomerPriceBreakdown";
 import { SwipeToPayButton } from "@/components/checkout/SwipeToPayButton";
-import { PromoCouponCelebration } from "@/components/checkout/PromoCouponCelebration";
+import { AppliedCouponCard } from "@/components/checkout/AppliedCouponCard";
 import { Id } from "../../../../../../convex/_generated/dataModel";
 import { formatRupees, toast } from "@hive/utils";
 import { getCustomerErrorMessage, getCustomerErrorCode } from "@/lib/customerErrors";
@@ -170,7 +170,6 @@ export default function OrderReviewPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoSuccessMsg, setPromoSuccessMsg] = useState<string | null>(null);
   const [promoValidating, setPromoValidating] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<{ code: string; savingsRupees: number } | null>(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [scriptLoadError, setScriptLoadError] = useState(false);
@@ -382,10 +381,7 @@ export default function OrderReviewPage() {
 
       const discountRupees = result.discountPaise / 100;
       setAppliedPromo(code, discountRupees, result.promoCouponId, result.discountPaise);
-      setPromoSuccessMsg(result.message);
       setPromoInput("");
-      // Show celebration popup
-      setCelebrationData({ code, savingsRupees: discountRupees });
     } catch (err: any) {
       setPromoError(err?.message || "Couldn't validate that code. Try again.");
     } finally {
@@ -937,21 +933,7 @@ export default function OrderReviewPage() {
                     </button>
                   </form>
                 ) : (
-                  <div className="flex items-center justify-between bg-green-50 border border-green-200 px-3 py-2 rounded-xl">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-extrabold text-green-800 flex items-center gap-1 uppercase">
-                        {appliedPromo}
-                      </span>
-                      <span className="text-[9px] text-green-700 font-medium">Coupon active</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemovePromo}
-                      className="text-[10px] font-extrabold uppercase tracking-wide text-red-500 hover:text-red-700 bg-transparent hover:bg-red-50/50 px-2 py-1 rounded-lg transition-all"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  <AppliedCouponCard code={appliedPromo} savingsRupees={discountAmount} onRemove={handleRemovePromo} />
                 )}
 
                 {promoError && (
@@ -1173,14 +1155,6 @@ export default function OrderReviewPage() {
         </div>
       </div>
 
-      {/* Promo Coupon Celebration Popup */}
-      {celebrationData && (
-        <PromoCouponCelebration
-          code={celebrationData.code}
-          savingsRupees={celebrationData.savingsRupees}
-          onDismiss={() => setCelebrationData(null)}
-        />
-      )}
     </div>
   );
 }
