@@ -205,6 +205,22 @@ const nextConfig: NextConfig = {
             key: "Cross-Origin-Opener-Policy",
             value: "same-origin-allow-popups",
           },
+          // Governs responses FROM this origin only — has no effect on what the app itself
+          // fetches from Clerk, Convex, Razorpay, R2 or Google, so it is safe alongside them.
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+          // Legacy Flash/PDF cross-domain policy file opt-out; effectively unused by any
+          // current asset here, so this is a no-risk hardening no-op.
+          {
+            key: "X-Permitted-Cross-Domain-Policies",
+            value: "none",
+          },
+          // Cross-Origin-Embedder-Policy is deliberately NOT set here. `require-corp` would
+          // block every cross-origin embed that doesn't send its own CORP/CORS headers —
+          // Clerk's auth iframe, Razorpay's checkout iframe, and Google Maps all fall into
+          // that bucket, so it would break sign-in and checkout rather than just harden them.
         ],
       },
     ];
