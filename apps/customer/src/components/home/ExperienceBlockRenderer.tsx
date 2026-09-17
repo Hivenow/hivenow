@@ -1023,18 +1023,37 @@ export function ExperienceBlockRenderer({ block }: { block: any }) {
       );
     }
 
+    // Admin's "Show See All Link" checkbox (ExperienceStudio.tsx) defaults to true when a
+    // section has no explicit config, matching the studio's own defaultConfig for new sections
+    // — so a section saved before this field existed behaves like one created with it checked.
+    const showSeeAll = block.config?.showSeeAll !== false;
+    const collectionSlug = block.data.collection?.slug;
+    const seeAllUrl = collectionSlug ? `/collections/${collectionSlug}` : null;
+
     return (
       <section className={`w-full bg-white pt-5 pb-1 sm:pt-8 sm:pb-2 border-b border-hive-border/20 ${block.config?.theme === "dark" ? "bg-slate-900 text-white" : ""}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-2 sm:gap-2.5 text-left">
-          <div className="flex flex-col gap-1 cursor-pointer group" onClick={() => {
-            if(block.data.collection?.slug) {
-              router.push(`/collections/${block.data.collection.slug}`);
-            }
-          }}>
-            <h2 className={`text-2xl font-serif font-semibold tracking-wide group-hover:underline ${block.config?.theme === "dark" ? "text-white" : "text-hive-dark"}`}>
-              {block.title || block.data.collection?.name}
-            </h2>
-            {block.subtitle && <p className={`text-sm ${block.config?.theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{block.subtitle}</p>}
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-col gap-1 cursor-pointer group" onClick={() => {
+              if(block.data.collection?.slug) {
+                router.push(`/collections/${block.data.collection.slug}`);
+              }
+            }}>
+              <h2 className={`text-2xl font-serif font-semibold tracking-wide group-hover:underline ${block.config?.theme === "dark" ? "text-white" : "text-hive-dark"}`}>
+                {block.title || block.data.collection?.name}
+              </h2>
+              {block.subtitle && <p className={`text-sm ${block.config?.theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{block.subtitle}</p>}
+            </div>
+
+            {showSeeAll && seeAllUrl && (
+              <Link
+                href={seeAllUrl}
+                className={`text-xs font-bold flex items-center gap-1 group pb-1 shrink-0 transition-colors ${block.config?.theme === "dark" ? "text-slate-300 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
+              >
+                <span>See All</span>
+                <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
           </div>
 
           {isCarousel ? (
@@ -1044,6 +1063,22 @@ export function ExperienceBlockRenderer({ block }: { block: any }) {
                   <ProductCard product={product} />
                 </div>
               ))}
+
+              {showSeeAll && seeAllUrl && (
+                <div className="w-[140px] sm:w-[190px] flex-shrink-0 snap-start flex flex-col justify-start group select-none">
+                  <Link
+                    href={seeAllUrl}
+                    className="w-full aspect-[4/5] rounded-xl sm:rounded-2xl bg-hive-cream border border-stone-200/80 shadow-2xs relative overflow-hidden flex flex-col items-center justify-center p-4 text-center transition-all duration-300 group-hover:shadow-md group-hover:border-stone-400 group-hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white text-stone-900 shadow-2xs border border-stone-200 flex items-center justify-center group-hover:bg-stone-900 group-hover:text-white group-hover:scale-105 transition-all duration-300 mb-3">
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                    </div>
+                    <span className="text-xs sm:text-sm font-serif font-bold text-stone-900 group-hover:underline transition-colors block">
+                      See All Items
+                    </span>
+                  </Link>
+                </div>
+              )}
             </div>
           ) : isTwoGrid ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 lg:gap-6 w-full">
