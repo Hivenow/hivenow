@@ -101,6 +101,15 @@ crons.interval(
   {}
 );
 
+// Daily check that every payout Hive calls paid is really released at Razorpay,
+// releasing any transfer still stuck on hold. 02:30 IST.
+crons.daily(
+  "reconcile_paid_transfers_daily",
+  { hourUTC: 21, minuteUTC: 0 },
+  internal.razorpayRoute.reconcilePaidTransfersWithRazorpay,
+  {}
+);
+
 // Daily price check: every product's storefront price must equal its seller base
 // price plus its tier's fees. Fixes and logs any that drifted (a stale price makes
 // checkout refuse the item). 03:30 IST, when the shop is quiet.

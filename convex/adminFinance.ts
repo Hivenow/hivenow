@@ -482,12 +482,20 @@ export const reconcileReleasedHolds = internalMutation({
 export const listPaidRouteOrdersInternal = internalQuery({
   args: {},
   handler: async (ctx) => {
+    // Newest first: ascending take(200) would check the same oldest orders
+    // forever once there are more than 200 paid orders. A release that is
+    // going to stick has done so within 30 days.
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const paid = await ctx.db
       .query("orders")
       .withIndex("by_payoutStatus", (q) => q.eq("payoutStatus", "paid"))
+      .order("desc")
       .take(200);
     return paid
+      .filter((o) => (o.payoutProcessedAt ?? o._creationTime) >= since)
       .filter((o) => o.razorpayTransferId && o.transferStatus !== "reversed")
+      // A chargeback may be holding this transfer on purpose; never release it.
+      .filter((o) => o.disputeStatus !== "open" && o.disputeStatus !== "lost")
       .map((o) => ({
         orderId: o._id,
         orderNumber: o.orderNumber,
