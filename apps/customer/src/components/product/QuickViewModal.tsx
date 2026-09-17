@@ -683,21 +683,18 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
         title={
           <div className="flex flex-col text-left">
             <span className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-amber-600 block mb-0.5">
-              EXPRESS LOCAL DELIVERY
+              EXPRESS DELIVERY
             </span>
             <h2 className="text-base sm:text-lg font-serif font-bold text-stone-900">
-              These pieces come from 2 different shops
+              Two shops. Two quick orders.
             </h2>
           </div>
         }
         className="max-w-md"
       >
         <div className="flex flex-col py-1 px-1 text-left select-none">
-          <p className="text-xs text-stone-600 leading-relaxed font-normal mb-1">
-            Our express riders pick up directly from each local shop to deliver straight to your door in 90 minutes.
-          </p>
-          <p className="text-[11px] text-stone-400 font-medium mb-4">
-            To get both outfits, simply place 2 quick separate orders.
+          <p className="text-xs text-stone-600 leading-relaxed font-normal mb-4">
+            Your bag already has items from another shop. Hive keeps orders from different shops separate, so you can place each one quickly.
           </p>
 
           <hr className="border-stone-100 mb-4" />
@@ -710,24 +707,24 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
               className="h-12 w-full bg-[#F5C22B] hover:bg-[#E0B120] text-stone-950 font-bold active:scale-[0.98] transition-all rounded-2xl text-xs sm:text-sm shadow-[0_4px_16px_rgba(245,194,43,0.25)] flex items-center justify-center gap-2 cursor-pointer"
             >
               <Heart className="w-4 h-4 fill-stone-950 stroke-stone-950" />
-              <span>Save to Wishlist & Finish Current Bag</span>
+              <span>Save &amp; order next</span>
               <span>→</span>
             </button>
             <span className="text-[10.5px] text-stone-500 font-medium mt-1.5 text-center block">
-              We&apos;ll bookmark this piece so you can easily order it right after!
+              We&apos;ll keep this piece ready while you finish your current order.
             </span>
-            
+
             {/* Option 2: Switch Bag */}
             <button
               onClick={handleClearAndContinue}
               className="h-11 w-full bg-stone-100/90 text-stone-800 hover:bg-stone-200 active:scale-[0.98] transition-all rounded-2xl text-xs font-semibold mt-3.5 flex items-center justify-center cursor-pointer"
             >
-              Switch Bag to This Item
+              Switch to this item
             </button>
             <span className="text-[9.5px] text-stone-400 font-normal mt-1 text-center block">
               Your previous item will be safely saved to your Wishlist.
             </span>
-            
+
             <button
               onClick={() => {
                 logFunnelEvent({
@@ -739,7 +736,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
               }}
               className="w-full text-center text-xs text-stone-500 hover:text-stone-900 font-medium py-2 transition-colors focus:outline-none mt-2 cursor-pointer"
             >
-              Keep Browsing
+              Keep browsing
             </button>
           </div>
         </div>
