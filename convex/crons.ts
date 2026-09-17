@@ -101,6 +101,16 @@ crons.interval(
   {}
 );
 
+// Daily price check: every product's storefront price must equal its seller base
+// price plus its tier's fees. Fixes and logs any that drifted (a stale price makes
+// checkout refuse the item). 03:30 IST, when the shop is quiet.
+crons.daily(
+  "sync_storefront_prices_daily",
+  { hourUTC: 22, minuteUTC: 0 },
+  internal.adminSettings.recalculateAllProductPricesInternal,
+  { reason: "daily_check" }
+);
+
 // Safety cron: Sweep unaccepted orders > 45 minutes every 5 minutes
 crons.interval(
   "sweep_unaccepted_orders_sla_every_5_minutes",

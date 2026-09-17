@@ -288,152 +288,81 @@ export const updatePlatformSettingsFromApi = mutation({
 });
 
 /**
- * Recalculates and synchronizes all existing products to the all-inclusive upfront pricing system.
- * Sets storefront price = Base Price + Handling Fee + Platform Fee + GST.
+ * Bring every product's storefront price in line with its seller base price and
+ * its boutique's current tier fees.
+ *
+ * Only `price` and `discountPrice` are written. The seller's `basePrice` and
+ * `baseDiscountPrice` are what they agreed to be paid and are never changed
+ * here — this used to round any paise off them and apply a "- 57.82"
+ * adjustment on every settings save. A product with no base price is skipped
+ * and reported rather than guessed at.
  */
+async function syncStorefrontPrices(ctx: any) {
+  const config = await fetchPlatformConfig(ctx);
+  const products = await ctx.db.query("products").collect();
+  const boutiques = await ctx.db.query("boutiques").collect();
+  const tierByBoutique = new Map<string, string>();
+  for (const b of boutiques) tierByBoutique.set(String(b._id), (b as any).pricingTier || "bronze");
+
+  const now = Date.now();
+  const updated: Array<{ id: string; name: string; from: number; to: number }> = [];
+  const skippedNoBase: string[] = [];
+
+  for (const product of products) {
+    if (!product.basePrice || product.basePrice <= 0) {
+      skippedNoBase.push(String(product._id));
+      continue;
+    }
+    const tierKey = tierByBoutique.get(String(product.boutiqueId)) || "bronze";
+    const targetPrice = calculateAllInclusivePricePaise(product.basePrice, tierKey, config);
+    const targetDiscountPrice = product.baseDiscountPrice
+      ? calculateAllInclusivePricePaise(product.baseDiscountPrice, tierKey, config)
+      : undefined;
+
+    if (product.price !== targetPrice || product.discountPrice !== targetDiscountPrice) {
+      await ctx.db.patch(product._id, { price: targetPrice, discountPrice: targetDiscountPrice, updatedAt: now });
+      updated.push({ id: String(product._id), name: product.name, from: product.price, to: targetPrice });
+    }
+  }
+
+  return {
+    success: true,
+    updatedCount: updated.length,
+    totalProducts: products.length,
+    updated: updated.slice(0, 50),
+    skippedNoBase,
+    message: `Synchronized ${updated.length} of ${products.length} products to all-inclusive upfront pricing.`,
+  };
+}
+
+/** Admin button: recalculate every storefront price now. */
 export const recalculateAllProductPrices = mutation({
   args: {},
   handler: async (ctx) => {
     await requireRole(ctx, "admin");
-
-    const config = await fetchPlatformConfig(ctx);
-
-    const products = await ctx.db.query("products").collect();
-    let updatedCount = 0;
-    const now = Date.now();
-
-
-    // Preload all boutiques to resolve pricing tiers in O(1)
-    const boutiques = await ctx.db.query("boutiques").collect();
-    const boutiqueTierMap = new Map<string, string>();
-    for (const b of boutiques) {
-      boutiqueTierMap.set(b._id, (b as any).pricingTier || "bronze");
-    }
-
-    for (const product of products) {
-      let basePrice = product.basePrice ?? product.price;
-      let baseDiscountPrice = product.baseDiscountPrice ?? product.discountPrice;
-
-      if (!basePrice || basePrice <= 0) {
-        basePrice = product.price;
-        baseDiscountPrice = product.discountPrice;
-      }
-
-      // Sanitize basePrice to clean integer paise (e.g. 90000 paise for ₹900)
-      if (basePrice % 100 !== 0) {
-        if (Math.abs((basePrice - 57.82) % 100) < 1) {
-          basePrice = Math.round(basePrice - 57.82);
-        } else {
-          basePrice = Math.round(basePrice / 100) * 100;
-        }
-      }
-      if (baseDiscountPrice && baseDiscountPrice % 100 !== 0) {
-        if (Math.abs((baseDiscountPrice - 57.82) % 100) < 1) {
-          baseDiscountPrice = Math.round(baseDiscountPrice - 57.82);
-        } else {
-          baseDiscountPrice = Math.round(baseDiscountPrice / 100) * 100;
-        }
-      }
-
-      const tierKey = boutiqueTierMap.get(product.boutiqueId) || "bronze";
-      const targetPrice = calculateAllInclusivePricePaise(basePrice, tierKey, config);
-      const targetDiscountPrice = baseDiscountPrice ? calculateAllInclusivePricePaise(baseDiscountPrice, tierKey, config) : undefined;
-
-      const needsUpdate =
-        product.price !== targetPrice ||
-        product.discountPrice !== targetDiscountPrice ||
-        product.basePrice !== basePrice;
-
-      if (needsUpdate) {
-        await ctx.db.patch(product._id, {
-          basePrice,
-          baseDiscountPrice,
-          price: targetPrice,
-          discountPrice: targetDiscountPrice,
-          updatedAt: now,
-        });
-        updatedCount++;
-      }
-    }
-
-    return {
-      success: true,
-      updatedCount,
-      totalProducts: products.length,
-      message: `Successfully synchronized ${updatedCount} of ${products.length} products to all-inclusive upfront pricing.`,
-    };
+    return await syncStorefrontPrices(ctx);
   },
 });
 
+/**
+ * Runs after tier fees or a store's tier change, and daily as a safety net.
+ * Any product it has to correct is logged: outside a settings change, that
+ * means something wrote a price without the fees.
+ */
 export const recalculateAllProductPricesInternal = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const config = await fetchPlatformConfig(ctx);
-
-    const products = await ctx.db.query("products").collect();
-    let updatedCount = 0;
-    const now = Date.now();
-
-    // Preload all boutiques to resolve pricing tiers in O(1)
-    const boutiques = await ctx.db.query("boutiques").collect();
-    const boutiqueTierMap = new Map<string, string>();
-    for (const b of boutiques) {
-      boutiqueTierMap.set(b._id, (b as any).pricingTier || "bronze");
+  args: { reason: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const result = await syncStorefrontPrices(ctx);
+    if (result.updatedCount > 0 || result.skippedNoBase.length > 0) {
+      console.warn(
+        `[syncStorefrontPrices][${args.reason ?? "settings_change"}] fixed ${result.updatedCount} price(s)` +
+          `, ${result.skippedNoBase.length} product(s) have no base price: ${JSON.stringify({
+            updated: result.updated,
+            skippedNoBase: result.skippedNoBase,
+          })}`
+      );
     }
-
-    for (const product of products) {
-      let basePrice = product.basePrice ?? product.price;
-      let baseDiscountPrice = product.baseDiscountPrice ?? product.discountPrice;
-
-      if (!basePrice || basePrice <= 0) {
-        basePrice = product.price;
-        baseDiscountPrice = product.discountPrice;
-      }
-
-      // Sanitize basePrice to clean integer paise (e.g. 90000 paise for ₹900)
-      if (basePrice % 100 !== 0) {
-        if (Math.abs((basePrice - 57.82) % 100) < 1) {
-          basePrice = Math.round(basePrice - 57.82);
-        } else {
-          basePrice = Math.round(basePrice / 100) * 100;
-        }
-      }
-      if (baseDiscountPrice && baseDiscountPrice % 100 !== 0) {
-        if (Math.abs((baseDiscountPrice - 57.82) % 100) < 1) {
-          baseDiscountPrice = Math.round(baseDiscountPrice - 57.82);
-        } else {
-          baseDiscountPrice = Math.round(baseDiscountPrice / 100) * 100;
-        }
-      }
-
-      const tierKey = boutiqueTierMap.get(product.boutiqueId) || "bronze";
-      const targetPrice = calculateAllInclusivePricePaise(basePrice, tierKey, config);
-      const targetDiscountPrice = baseDiscountPrice ? calculateAllInclusivePricePaise(baseDiscountPrice, tierKey, config) : undefined;
-
-      const needsUpdate =
-        product.price !== targetPrice ||
-        product.discountPrice !== targetDiscountPrice ||
-        product.basePrice !== basePrice;
-
-      if (needsUpdate) {
-        await ctx.db.patch(product._id, {
-          basePrice,
-          baseDiscountPrice,
-          price: targetPrice,
-          discountPrice: targetDiscountPrice,
-          updatedAt: now,
-        });
-        updatedCount++;
-      }
-    }
-
-
-    return {
-      success: true,
-      updatedCount,
-      totalProducts: products.length,
-      message: `Successfully synchronized ${updatedCount} of ${products.length} products to all-inclusive upfront pricing.`,
-    };
+    return result;
   },
 });
 
