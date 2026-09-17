@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useCartStore } from "@/store/cart-store";
 import { CustomerPriceBreakdown } from "@/components/checkout/CustomerPriceBreakdown";
+import { GstAndOtherChargesRow } from "@/components/checkout/GstAndOtherChargesRow";
 import { useLocation } from "@/context/LocationContext";
 import { useCheckoutStore } from "@/store/checkout-store";
 import { useOrderStore } from "@/store/order-store";
@@ -832,24 +833,13 @@ export default function CheckoutAddressPage() {
                   <span>Base Price</span>
                   <span>{formatRupees(Math.max(0, subtotal - handlingCharge - platformFee - gstAmount))}</span>
                 </div>
-                {handlingCharge > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>Handling Fee</span>
-                    <span>{formatRupees(handlingCharge)}</span>
-                  </div>
-                )}
-                {platformFee > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>Platform Fee</span>
-                    <span>{formatRupees(platformFee)}</span>
-                  </div>
-                )}
-                {gstAmount > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>GST on Fees</span>
-                    <span>{formatRupees(gstAmount)}</span>
-                  </div>
-                )}
+                <GstAndOtherChargesRow
+                  handlingCharge={handlingCharge}
+                  platformFee={platformFee}
+                  gstOnCharges={gstAmount}
+                  formatAmount={formatRupees}
+                  className="text-[10.5px] text-hive-text-muted/80"
+                />
               </div>
             )}
 
