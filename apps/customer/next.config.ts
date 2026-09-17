@@ -129,22 +129,14 @@ const nextConfig: NextConfig = {
         destination: "/legal/privacy-policy",
         permanent: true,
       },
-      {
-        source: "/collections",
-        destination: "/products",
-        permanent: true,
-      },
-      {
-        // Carry the slug across to canonical /products/:slug
-        source: "/collections/:slug",
-        destination: "/products/:slug",
-        permanent: true,
-      },
-      {
-        source: "/collections/:slug*",
-        destination: "/products",
-        permanent: true,
-      },
+      // /collections and /collections/:slug used to redirect here, back when "collection"
+      // meant nothing more than an alias for a product category. They now name a real,
+      // merchandiser-curated feature (collections/collectionProducts tables, its own
+      // getAllCollections/getCollection queries) with its own index and detail pages — these
+      // redirects were shadowing both, at the Next.js routing layer, before either page's code
+      // ever ran. Every /collections/<slug> link in the app already passes a genuine collection
+      // slug (CollectionCard, MoodBoardGrid, the homepage collection block), never a category
+      // slug, so removing this does not repoint any existing link at the wrong content.
       {
         source: "/category/:slug*",
         destination: "/products/:slug*",
