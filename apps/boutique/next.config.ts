@@ -78,6 +78,19 @@ const nextConfig: NextConfig = {
             key: "Cross-Origin-Opener-Policy",
             value: "same-origin-allow-popups",
           },
+          // Governs responses FROM this origin only. Nothing else embeds seller.hivenow.in
+          // assets — the customer app and admin only link to it, and the Capacitor app loads it
+          // as a top-level page — so this cannot break any outbound call or the Android shell.
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "X-Permitted-Cross-Domain-Policies",
+            value: "none",
+          },
+          // Cross-Origin-Embedder-Policy is deliberately NOT set: require-corp would block the
+          // Google sign-in popup flow, Razorpay onboarding and cross-origin product images.
         ],
       },
     ];
