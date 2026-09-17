@@ -28,6 +28,7 @@ import { useConvexMutation } from "@/hooks/useConvexMutation";
 import { getEffectiveCheckoutItems } from "@/lib/getEffectiveCheckoutItems";
 import { useSessionStore } from "@/context/SessionContext";
 import { CustomerPriceBreakdown } from "@/components/checkout/CustomerPriceBreakdown";
+import { GstAndOtherChargesRow } from "@/components/checkout/GstAndOtherChargesRow";
 import { SwipeToPayButton } from "@/components/checkout/SwipeToPayButton";
 import { Id } from "../../../../../../convex/_generated/dataModel";
 import { formatRupees, toast } from "@hive/utils";
@@ -1016,24 +1017,13 @@ export default function OrderReviewPage() {
                   <span>Base Price</span>
                   <span>{formatRupees(Math.max(0, subtotal - handlingCharge - platformFee - gstOnCharges))}</span>
                 </div>
-                {handlingCharge > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>Handling Fee</span>
-                    <span>{formatRupees(handlingCharge)}</span>
-                  </div>
-                )}
-                {platformFee > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>Platform Fee</span>
-                    <span>{formatRupees(platformFee)}</span>
-                  </div>
-                )}
-                {gstOnCharges > 0 && (
-                  <div className="flex justify-between items-center text-[10.5px] text-hive-text-muted/80">
-                    <span>GST on Fees</span>
-                    <span>{formatRupees(gstOnCharges)}</span>
-                  </div>
-                )}
+                <GstAndOtherChargesRow
+                  handlingCharge={handlingCharge}
+                  platformFee={platformFee}
+                  gstOnCharges={gstOnCharges}
+                  formatAmount={formatRupees}
+                  className="text-[10.5px] text-hive-text-muted/80"
+                />
               </div>
             )}
 

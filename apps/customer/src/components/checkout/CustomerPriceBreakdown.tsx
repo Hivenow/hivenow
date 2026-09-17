@@ -2,6 +2,7 @@
 
 import React from "react";
 import { HelpCircle, AlertCircle } from "lucide-react";
+import { GstAndOtherChargesRow } from "./GstAndOtherChargesRow";
 
 export interface CustomerPriceBreakdownProps {
   subtotal: number;          // Product total in Rupees
@@ -86,24 +87,14 @@ export const CustomerPriceBreakdown: React.FC<CustomerPriceBreakdownProps> = ({
                 <span>Base Price</span>
                 <span className="font-mono">{formatCurrency(Math.max(0, subtotal - handlingCharge - platformFee - gstOnCharges))}</span>
               </div>
-              {handlingCharge > 0 && (
-                <div className="flex justify-between items-center text-[11px] text-stone-500">
-                  <span>Handling Fee</span>
-                  <span className="font-mono">{formatCurrency(handlingCharge)}</span>
-                </div>
-              )}
-              {platformFee > 0 && (
-                <div className="flex justify-between items-center text-[11px] text-stone-500">
-                  <span>Platform Fee</span>
-                  <span className="font-mono">{formatCurrency(platformFee)}</span>
-                </div>
-              )}
-              {gstOnCharges > 0 && (
-                <div className="flex justify-between items-center text-[11px] text-stone-500">
-                  <span>GST on Fees</span>
-                  <span className="font-mono">{formatCurrency(gstOnCharges)}</span>
-                </div>
-              )}
+              <GstAndOtherChargesRow
+                handlingCharge={handlingCharge}
+                platformFee={platformFee}
+                gstOnCharges={gstOnCharges}
+                formatAmount={formatCurrency}
+                className="text-[11px] text-stone-500"
+                amountClassName="font-mono"
+              />
             </div>
           )}
 
