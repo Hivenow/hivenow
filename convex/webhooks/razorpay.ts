@@ -115,6 +115,15 @@ export const handleRazorpayWebhook = httpAction(async (ctx, request) => {
       });
     }
 
+    // Route linked-account (seller KYC) events.
+    const accountData = event.payload?.account?.entity;
+    if (typeof eventType === "string" && eventType.startsWith("account.") && accountData?.id) {
+      await ctx.runMutation(internal.webhooks.razorpay.processLinkedAccountEvent, {
+        eventType,
+        razorpayAccountId: String(accountData.id),
+      });
+    }
+
     const paymentData = event.payload?.payment?.entity;
     if (paymentData) {
       const razorpayOrderId = paymentData.order_id;
@@ -962,5 +971,54 @@ export const processPaymentDispute = internalMutation({
       });
     }
     return { success: true, reason: "lost_recovering_seller_share", sellerSharePaise };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutation: processLinkedAccountEvent (seller KYC on Razorpay Route)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Mirror a seller's Route linked-account status from Razorpay's account.*
+ * events, so the partner finance page and payout code see real KYC state.
+ * Events for an account no boutique owns are logged and acknowledged.
+ */
+export const processLinkedAccountEvent = internalMutation({
+  args: {
+    eventType: v.string(),
+    razorpayAccountId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    type Kyc = "created" | "under_review" | "activated" | "needs_clarification";
+    type AccountStatus = "created" | "active" | "suspended" | "needs_attention";
+    const MAP: Record<string, { kycStatus?: Kyc; razorpayAccountStatus?: AccountStatus }> = {
+      "account.activated": { kycStatus: "activated", razorpayAccountStatus: "active" },
+      "account.instantly_activated": { kycStatus: "activated", razorpayAccountStatus: "active" },
+      // Can receive transfers with limits while KYC finishes.
+      "account.activated_kyc_pending": { kycStatus: "under_review", razorpayAccountStatus: "active" },
+      "account.under_review": { kycStatus: "under_review", razorpayAccountStatus: "created" },
+      "account.needs_clarification": { kycStatus: "needs_clarification", razorpayAccountStatus: "needs_attention" },
+      "account.rejected": { kycStatus: "needs_clarification", razorpayAccountStatus: "needs_attention" },
+      "account.suspended": { razorpayAccountStatus: "suspended" },
+    };
+    const update = MAP[args.eventType];
+    if (!update) {
+      console.log(`[RazorpayAccount] ${args.eventType} for ${args.razorpayAccountId}: no status change.`);
+      return { success: true, reason: "ignored_event" };
+    }
+
+    const boutique = await ctx.db
+      .query("boutiques")
+      .withIndex("by_razorpayAccountId", (q) => q.eq("razorpayAccountId", args.razorpayAccountId))
+      .first();
+    if (!boutique) {
+      console.error(`[RazorpayAccount][ALERT] ${args.eventType} for ${args.razorpayAccountId}: no boutique has this account.`);
+      return { success: false, reason: "boutique_not_found" };
+    }
+
+    await ctx.db.patch(boutique._id, { ...update, updatedAt: Date.now() } as any);
+    console.log(
+      `[RazorpayAccount] ${boutique.boutiqueName ?? boutique._id}: ${args.eventType} -> kyc=${update.kycStatus ?? boutique.kycStatus}, account=${update.razorpayAccountStatus}`
+    );
+    return { success: true, reason: "updated" };
   },
 });
