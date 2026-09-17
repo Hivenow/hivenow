@@ -77,40 +77,6 @@ export interface CheckoutPricing {
   sellerCommissionConfigPercent: number;
 }
 
-// ─── Legacy types (backward compat for old orders) ───────────────────────────
-
-/** @deprecated Use PlatformConfig instead */
-export interface PlatformSettings {
-  markupRate: number;
-  platformFeeRate: number;
-  markupType?: "flat" | "tiered";
-  markupTiers?: Array<{ min_price: number; max_price: number | null; rate: number }>;
-  tier1?: { name: string; slabs: Array<{ min_price: number; max_price: number | null; rate: number }> };
-  tier2?: { name: string; slabs: Array<{ min_price: number; max_price: number | null; rate: number }> };
-  tier3?: { name: string; slabs: Array<{ min_price: number; max_price: number | null; rate: number }> };
-}
-
-/** @deprecated Use SellerItemPricing instead */
-export interface ItemFinancialSnapshot {
-  priceAtPurchase: number;
-  basePriceAtPurchase: number;
-  platformMarkupRateAtPurchase: number;
-  platformFeeRateAtPurchase: number;
-  fixedPlatformFeeAtPurchase: number;
-  platformMarkupAmount: number;
-  platformFeeAmount: number;
-  gstAmountAtPurchase: number;
-  subtotal: number;
-}
-
-/** @deprecated */
-export interface StoreSettlement {
-  merchantPayablePaise: number;
-  merchantPayableRupees: number;
-  totalBasePricePaise: number;
-  totalPlatformFeePaise: number;
-}
-
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 export const DEFAULT_TIERS_CONFIG: TierPricingConfig[] = [
@@ -165,18 +131,6 @@ export const DEFAULT_COMMISSION_TIERS = [
 export const DEFAULT_HANDLING_CHARGE_PAISE = 2900;  // ₹29
 export const DEFAULT_PLATFORM_FEE_PAISE = 2000;     // ₹20
 export const DEFAULT_GST_RATE_PERCENT = 18;
-
-/** @deprecated Legacy defaults — kept for backward compat */
-export const FIXED_PLATFORM_FEE_PAISE = 700;
-export const FIXED_PLATFORM_FEE_RUPEES = 7;
-export const DEFAULT_TIER_SLABS = [
-  { min_price: 0, max_price: 499, rate: 8 },
-  { min_price: 500, max_price: 999, rate: 8 },
-  { min_price: 1000, max_price: 1499, rate: 8 },
-  { min_price: 1500, max_price: 2499, rate: 8 },
-  { min_price: 2500, max_price: 4999, rate: 8 },
-  { min_price: 5000, max_price: null, rate: 5 },
-];
 
 // ─── Slab Validation ─────────────────────────────────────────────────────────
 
@@ -251,30 +205,6 @@ export async function getPlatformConfig(ctx: QueryCtx | MutationCtx): Promise<Pl
   };
 }
 
-/**
- * @deprecated Use getPlatformConfig instead. Kept for backward compat during migration.
- */
-export async function getPlatformSettings(ctx: QueryCtx | MutationCtx): Promise<PlatformSettings> {
-  const settings = (await ctx.db.query("platformSettings").first()) as any;
-  if (!settings) {
-    return {
-      markupRate: 0.15,
-      platformFeeRate: 0.02,
-      markupType: "tiered",
-      markupTiers: DEFAULT_TIER_SLABS,
-    };
-  }
-  return {
-    markupRate: settings.markupRate ?? 0.15,
-    platformFeeRate: settings.platformFeeRate ?? 0.02,
-    markupType: settings.markupType ?? "tiered",
-    markupTiers: settings.markupTiers ?? DEFAULT_TIER_SLABS,
-    tier1: settings.tier1,
-    tier2: settings.tier2,
-    tier3: settings.tier3,
-  };
-}
-
 // ─── Tier & Slab Resolution ──────────────────────────────────────────────────
 
 /**
@@ -297,22 +227,6 @@ export function resolveTierConfig(
   const match = tiers.find(t => t.key.toLowerCase() === normalizedKey);
   if (match) return match;
   return tiers[0] || DEFAULT_TIERS_CONFIG[0]!;
-}
-
-/**
- * @deprecated Use resolveTierConfig instead. Kept for backward compat.
- */
-export function resolveCommissionTier(
-  tierKey: string,
-  config: PlatformConfig
-): { key: string; name: string; sellerCommissionPercent: number } {
-  const tier = resolveTierConfig(tierKey, config);
-  const defaultPercent = tier.commissionSlabs?.[0]?.commissionPercent ?? 2;
-  return {
-    key: tier.key,
-    name: tier.name,
-    sellerCommissionPercent: defaultPercent,
-  };
 }
 
 /**
@@ -415,18 +329,6 @@ export function calculateAllInclusivePricePaise(
   return basePricePaise + charges.totalPlatformFeesPaise;
 }
 
-/**
- * Calculates the all-inclusive customer price in RUPEES from the seller's base price in RUPEES.
- */
-export function calculateAllInclusivePrice(
-  basePriceRupees: number,
-  tierKey: string | undefined,
-  config: PlatformConfig
-): number {
-  if (!basePriceRupees || basePriceRupees <= 0) return 0;
-  const paise = Math.round(basePriceRupees * 100);
-  return calculateAllInclusivePricePaise(paise, tierKey, config) / 100;
-}
 
 // ─── Checkout-Level Pricing ──────────────────────────────────────────────────
 
@@ -529,273 +431,5 @@ export function calculateCheckoutPricing(
     platformFeeConfigPaise: tier.platformFeePaise,
     gstRateConfigPercent: tier.platformGstPercent,
     sellerCommissionConfigPercent: primaryCommissionPercent,
-  };
-}
-
-
-
-// ─── Legacy Functions (backward compat) ──────────────────────────────────────
-
-/** @deprecated Use resolveCommissionTier instead */
-export function selectMarkupRate(basePriceRupees: number, settings: PlatformSettings, pricingTier?: string): number {
-  const markupType = settings.markupType ?? "tiered";
-  const tierKey = pricingTier || "tier1";
-  const tierConfig = (settings as any)[tierKey] as { name: string; slabs: Array<{ min_price: number; max_price: number | null; rate: number }> } | undefined;
-  const hasTierSpecificSlabs = tierConfig && Array.isArray(tierConfig.slabs) && tierConfig.slabs.length > 0;
-  let tiers: Array<{ min_price: number; max_price: number | null; rate: number }> | undefined;
-  if (hasTierSpecificSlabs) {
-    tiers = tierConfig!.slabs;
-  } else if (markupType === "tiered") {
-    tiers = settings.markupTiers ?? DEFAULT_TIER_SLABS;
-  }
-  if (tiers && Array.isArray(tiers) && tiers.length > 0) {
-    const tier = tiers.find((t) => {
-      const minMatch = basePriceRupees >= t.min_price;
-      const maxMatch = t.max_price === null || t.max_price === undefined || basePriceRupees <= t.max_price;
-      return minMatch && maxMatch;
-    });
-    if (tier) return tier.rate / 100;
-  }
-  return settings.markupRate ?? 0.15;
-}
-
-export const getPlatformMarkupRate = selectMarkupRate;
-
-/** @deprecated Product price = seller base price in v2. No markup calculation needed. */
-export function calculateProductPricing(
-  basePriceRupees: number,
-  baseDiscountPriceRupees: number | undefined | null,
-  settings: PlatformSettings,
-  pricingTier?: string
-) {
-  // v2: Product price = base price (no markup). Return identity.
-  const customerPrice = basePriceRupees;
-  const customerDiscountPrice = baseDiscountPriceRupees && baseDiscountPriceRupees > 0
-    ? baseDiscountPriceRupees
-    : undefined;
-
-  const discountPercent = customerDiscountPrice
-    ? Math.max(0, Math.round(((customerPrice - customerDiscountPrice) / customerPrice) * 100))
-    : 0;
-
-  return {
-    basePrice: basePriceRupees,
-    customerPrice,
-    baseDiscountPrice: baseDiscountPriceRupees ?? undefined,
-    customerDiscountPrice,
-    markupRate: 0,
-    discountMarkupRate: 0,
-    discountPercent,
-    markupAmount: 0,
-    platformFeeAmount: 0,
-    sellerProcessingFee: 0,
-    gstAmount: 0,
-    discountGstAmount: 0,
-  };
-}
-
-/** @deprecated Use calculateCheckoutPricing instead */
-export async function calculateItemFinancials(
-  ctx: MutationCtx | QueryCtx,
-  productRow: any,
-  clientPricePaise: number,
-  quantity: number
-): Promise<ItemFinancialSnapshot> {
-  // In v2, product price = base price. Validate that client price matches DB.
-  const canonicalPricePaise = productRow.discountPrice ?? productRow.price;
-
-  if (Math.abs(canonicalPricePaise - clientPricePaise) > 100) {
-    const { ConvexError } = await import("convex/values");
-    throw new ConvexError({
-      code: "STALE_CART_PRICE",
-      message: "The prices of some items in your cart have been updated. Please review your new total before checking out.",
-    });
-  }
-
-  // For v2, base price = price (no markup)
-  const basePricePaise = productRow.basePrice ?? canonicalPricePaise;
-
-  return {
-    priceAtPurchase: canonicalPricePaise,
-    basePriceAtPurchase: basePricePaise,
-    platformMarkupRateAtPurchase: 0,
-    platformFeeRateAtPurchase: 0,
-    fixedPlatformFeeAtPurchase: 0,
-    platformMarkupAmount: 0,
-    platformFeeAmount: 0,
-    gstAmountAtPurchase: 0,
-    subtotal: canonicalPricePaise * quantity,
-  };
-}
-
-/** @deprecated Use calculateCheckoutPricing().sellerPayoutPaise instead */
-export function calculateBoutiquePayout(orderItem: {
-  // v2 fields
-  sellerBasePricePaise?: number;
-  sellerCommissionPaise?: number;
-  sellerCommissionGstPaise?: number;
-  sellerPayoutPaise?: number;
-  // v1 fields
-  basePriceAtPurchase?: number;
-  platformFeeAmount?: number;
-  priceAtPurchase?: number;
-  price?: number;
-}): number {
-  // v2: use explicit seller payout
-  if (orderItem.sellerPayoutPaise !== undefined) {
-    return orderItem.sellerPayoutPaise;
-  }
-  // v1: legacy calculation
-  if (orderItem.basePriceAtPurchase !== undefined && orderItem.platformFeeAmount !== undefined) {
-    return orderItem.basePriceAtPurchase - orderItem.platformFeeAmount;
-  }
-  const price = orderItem.priceAtPurchase ?? orderItem.price ?? 0;
-  return Math.floor(price * 0.82);
-}
-
-/** @deprecated Use calculateCheckoutPricing() instead */
-export function calculateStoreSettlement(
-  items: Array<{
-    sellerPayoutPaise?: number;
-    basePriceAtPurchase?: number;
-    platformFeeAmount?: number;
-    priceAtPurchase?: number;
-    price?: number;
-    quantity: number;
-  }>
-): StoreSettlement {
-  let merchantPayablePaise = 0;
-  let totalBasePricePaise = 0;
-  let totalPlatformFeePaise = 0;
-
-  for (const item of items) {
-    const itemPayoutPaise = calculateBoutiquePayout(item);
-    merchantPayablePaise += itemPayoutPaise * item.quantity;
-    const priceAtPurchase = item.priceAtPurchase ?? item.price ?? 0;
-
-    if (item.basePriceAtPurchase !== undefined && item.platformFeeAmount !== undefined) {
-      totalBasePricePaise += item.basePriceAtPurchase * item.quantity;
-      totalPlatformFeePaise += item.platformFeeAmount * item.quantity;
-    } else {
-      totalBasePricePaise += priceAtPurchase * item.quantity;
-    }
-  }
-
-  const roundedMerchantPayablePaise = Math.round(merchantPayablePaise);
-
-  return {
-    merchantPayablePaise: roundedMerchantPayablePaise,
-    merchantPayableRupees: roundedMerchantPayablePaise / 100,
-    totalBasePricePaise: Math.round(totalBasePricePaise),
-    totalPlatformFeePaise: Math.round(totalPlatformFeePaise),
-  };
-}
-
-/** @deprecated */
-export function calculateOrderTotals(
-  itemsFinancials: Array<{ priceAtPurchase: number; quantity: number }>,
-  deliveryFeePaise: number,
-  discountPaise: number
-) {
-  const subtotalPaise = Math.round(
-    itemsFinancials.reduce((sum, item) => sum + item.priceAtPurchase * item.quantity, 0)
-  );
-  const totalPaise = Math.max(0, subtotalPaise - Math.round(discountPaise) + Math.round(deliveryFeePaise));
-
-  return {
-    subtotalPaise,
-    subtotalRupees: subtotalPaise / 100,
-    deliveryFeePaise: Math.round(deliveryFeePaise),
-    deliveryFeeRupees: Math.round(deliveryFeePaise) / 100,
-    discountPaise: Math.round(discountPaise),
-    discountRupees: Math.round(discountPaise) / 100,
-    totalPaise,
-    totalRupees: totalPaise / 100,
-  };
-}
-
-/** @deprecated */
-export function calculateInvoiceFinancials(
-  items: Array<{
-    productId: string;
-    productName: string;
-    productImage?: string;
-    size: string;
-    quantity: number;
-    priceAtPurchase: number;
-  }>,
-  deliveryFeePaise: number,
-  discountPaise: number
-) {
-  const invoiceItems = items.map((item) => ({
-    productId: item.productId,
-    productName: item.productName,
-    productImage: item.productImage,
-    size: item.size,
-    quantity: item.quantity,
-    unitPricePaise: Math.round(item.priceAtPurchase),
-    unitPriceRupees: Math.round(item.priceAtPurchase) / 100,
-    totalPricePaise: Math.round(item.priceAtPurchase * item.quantity),
-    totalPriceRupees: Math.round(item.priceAtPurchase * item.quantity) / 100,
-  }));
-
-  const subtotalPaise = invoiceItems.reduce((sum, item) => sum + item.totalPricePaise, 0);
-  const totalAmountPaise = Math.max(0, subtotalPaise - Math.round(discountPaise) + Math.round(deliveryFeePaise));
-
-  return {
-    items: invoiceItems,
-    subtotalPaise,
-    subtotalRupees: subtotalPaise / 100,
-    deliveryFeePaise: Math.round(deliveryFeePaise),
-    deliveryFeeRupees: Math.round(deliveryFeePaise) / 100,
-    discountPaise: Math.round(discountPaise),
-    discountRupees: Math.round(discountPaise) / 100,
-    taxPaise: 0,
-    taxRupees: 0,
-    totalAmountPaise,
-    totalAmountRupees: totalAmountPaise / 100,
-  };
-}
-
-/** @deprecated Use pricingSnapshot on order instead */
-export function calculateBoutiqueEarnings(
-  items: Array<{
-    sellerPayoutPaise?: number;
-    basePriceAtPurchase?: number;
-    platformMarkupAmount?: number;
-    platformFeeAmount?: number;
-    fixedPlatformFeeAtPurchase?: number;
-    priceAtPurchase: number;
-    quantity: number;
-  }>
-) {
-  let totalPlatformMarkupPaise = 0;
-  let totalPlatformFeePaise = 0;
-  let totalFixedPlatformFeePaise = 0;
-  let totalBoutiquePayoutPaise = 0;
-
-  for (const item of items) {
-    const qty = item.quantity;
-    if (item.platformMarkupAmount !== undefined && item.platformFeeAmount !== undefined) {
-      totalPlatformMarkupPaise += item.platformMarkupAmount * qty;
-      totalPlatformFeePaise += item.platformFeeAmount * qty;
-      totalFixedPlatformFeePaise += (item.fixedPlatformFeeAtPurchase ?? FIXED_PLATFORM_FEE_PAISE) * qty;
-    }
-    totalBoutiquePayoutPaise += calculateBoutiquePayout(item) * qty;
-  }
-
-  const totalCommissionPaise = totalPlatformMarkupPaise + totalPlatformFeePaise + totalFixedPlatformFeePaise;
-  const gstPaise = Math.floor(totalCommissionPaise * 0.18);
-  const netCommissionPaise = totalCommissionPaise - gstPaise;
-
-  return {
-    totalPlatformMarkupPaise: Math.round(totalPlatformMarkupPaise),
-    totalPlatformFeePaise: Math.round(totalPlatformFeePaise),
-    totalFixedPlatformFeePaise: Math.round(totalFixedPlatformFeePaise),
-    totalCommissionPaise: Math.round(totalCommissionPaise),
-    gstPaise: Math.round(gstPaise),
-    netCommissionPaise: Math.round(netCommissionPaise),
-    totalBoutiquePayoutPaise: Math.round(totalBoutiquePayoutPaise),
-    totalBoutiquePayoutRupees: Math.round(totalBoutiquePayoutPaise) / 100,
   };
 }

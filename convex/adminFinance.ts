@@ -11,6 +11,7 @@ import { incrementProductStats } from "./lib/productStats";
 import { formatMoney } from "./lib/money";
 import { internal } from "./_generated/api";
 import { resolvePayoutHoldDecision, RETURN_WINDOW_MS } from "./lib/payoutHold";
+import { calculateLegacyFallbackPayout } from "./razorpayRoute";
 
 /**
  * Get aggregated dashboard metrics for the Admin Finance screen.
@@ -942,165 +943,6 @@ export const settleEligibleOrdersAdmin = mutation({
   },
 });
 
-/**
- * Seed historical finance records backfilling orders, commissions and settlements.
- */
-export const seedFinanceMockDataAdmin = mutation({
-  args: {},
-  handler: async (ctx) => {
-    if (process.env.ENABLE_DEBUG_TOOLS !== "true") {
-      throw new Error("Seeding mock finance data is disabled in this environment.");
-    }
-    await requireRole(ctx, "admin");
-
-    const orders = await ctx.db.query("orders").collect();
-    const now = Date.now();
-    let seededCount = 0;
-
-    for (const order of orders) {
-      if (order.paymentStatus !== "paid") continue;
-
-      // 1. Skip if settlements or commissions already exist for this order
-      const existingSettlement = await ctx.db
-        .query("settlementLedger")
-        .filter((q) => q.eq(q.field("orderId"), order._id))
-        .first();
-
-      if (existingSettlement) continue;
-
-      const boutique = await ctx.db.get(order.boutiqueId);
-      if (!boutique) continue;
-
-      // 2. Fetch order items
-      const items = await ctx.db
-        .query("orderItems")
-        .withIndex("by_orderId", (q) => q.eq("orderId", order._id))
-        .collect();
-
-      const netOrderSubtotal = order.subtotal - (order.discount ?? 0);
-      const globalPlatformCommission = order.orderSnapshot?.commissionAmount ?? 0;
-      const globalGstOnCommission = order.orderSnapshot?.gstAmount ?? 0;
-      const commissionRate = order.orderSnapshot?.commissionRate || boutique.commissionRate || 10;
-
-      let allocatedCommissionSum = 0;
-      let allocatedGstSum = 0;
-      const totalItems = items.length;
-
-      // 3. Insert commission per item
-      for (let i = 0; i < totalItems; i++) {
-        const item = items[i];
-        if (!item) continue;
-
-        // Calculate the item's proportional discount share to find its true net value
-        const itemProportionalDiscount = Math.floor(
-          (item.subtotal / order.subtotal) * (order.discount ?? 0)
-        );
-        const itemNetSubtotal = item.subtotal - itemProportionalDiscount;
-
-        let itemCommission = 0;
-        let itemGst = 0;
-
-        // Check if we have arrived at the final item in the array
-        if (i === totalItems - 1) {
-          // Allocate the exact algebraic remainder to guarantee 100% split accuracy
-          itemCommission = globalPlatformCommission - allocatedCommissionSum;
-          itemGst = globalGstOnCommission - allocatedGstSum;
-        } else {
-          // Proportional calculation step for intermediate items
-          const proportionalShare = itemNetSubtotal / netOrderSubtotal;
-          
-          if ((item as any).platformMarkupAmount !== undefined && (item as any).platformFeeAmount !== undefined) {
-             const basePlatformRevenue = ((item as any).platformMarkupAmount + (item as any).platformFeeAmount) * item.quantity;
-             // Platform absorbs discount fully. Boutique gets basePrice - fee.
-             itemCommission = basePlatformRevenue - itemProportionalDiscount;
-             // If discount > markup, platform revenue could technically be negative, clamp to 0 or allow negative?
-             // Usually allow negative to reflect true loss, but let's clamp at 0 for GST logic.
-             itemGst = Math.floor(Math.max(0, itemCommission) * 0.18);
-          } else {
-             itemCommission = Math.floor(globalPlatformCommission * proportionalShare);
-             itemGst = Math.floor(globalGstOnCommission * proportionalShare);
-          }
-
-          // Update running sums
-          allocatedCommissionSum += itemCommission;
-          allocatedGstSum += itemGst;
-        }
-
-        const netCommission = itemCommission - itemGst;
-
-        await ctx.db.insert("commissionLedger", {
-          orderId: order._id,
-          orderItemId: item._id,
-          productId: item.productId,
-          boutiqueId: order.boutiqueId,
-          priceAtPurchase: item.priceAtPurchase,
-          quantity: item.quantity,
-          commissionRate,
-          commissionAmount: itemCommission,
-          gstAmount: itemGst,
-          netCommission,
-          commissionVersion: "v2_proportional", // updated rule snapshot
-          createdAt: order.createdAt,
-        });
-      }
-
-      // 4. Calculate Net Boutique Accrual (Exclude customer-paid delivery fee)
-      const accrualAmount = netOrderSubtotal - (globalPlatformCommission + globalGstOnCommission);
-
-      const settlementHoldDays = 7; // weekly payout hold
-      const expiresAt = (order.deliveredAt || order.createdAt) + settlementHoldDays * 24 * 3600 * 1000;
-      const isSettled = expiresAt <= now && order.status === "delivered";
-
-      const settlementId = await ctx.db.insert("settlementLedger", {
-        boutiqueId: order.boutiqueId,
-        orderId: order._id,
-        type: "accrual",
-        source: "order",
-        amount: accrualAmount,
-        status: isSettled ? "available" : "pending",
-        claimWindowDays: 1, // 24h customer claim window
-        accruedAt: order.deliveredAt || order.createdAt,
-        settledAt: isSettled ? expiresAt : undefined,
-        createdAt: order.createdAt,
-      });
-
-      // 6. Handle refund mock details if order was refunded
-      if (order.status === "refunded") {
-        const refundNumber = `REF-${new Date(order.updatedAt || now).toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(
-          1000 + Math.random() * 9000
-        )}`;
-
-        await ctx.db.insert("refundLedger", {
-          refundNumber,
-          orderId: order._id,
-          amount: order.total,
-          status: "processed",
-          refundType: "full_refund",
-          razorpayRefundId: "re_" + Math.random().toString(36).slice(2, 11),
-          notes: "Customer dispute claim settled",
-          createdAt: order.updatedAt || now,
-        });
-
-        // Insert compensating deduction
-        await ctx.db.insert("settlementLedger", {
-          boutiqueId: order.boutiqueId,
-          orderId: order._id,
-          type: "refund_deduction",
-          source: "claim",
-          amount: -accrualAmount,
-          status: "available",
-          createdAt: order.updatedAt || now,
-          accruedAt: order.updatedAt || now,
-          settledAt: order.updatedAt || now,
-        });
-      }
-
-      seededCount++;
-    }
-
-    return { seededCount };
-  },
-});
 
 /**
  * Retrieve platform commissions cuts ledger.
@@ -1444,6 +1286,21 @@ export const getRegionalEconomicsDashboardAdmin = query({
   },
 });
 
+/**
+ * What a seller is owed for one order, for manual bank settlement.
+ *
+ * The order's frozen pricing snapshot is what Route would transfer; orders placed
+ * before snapshots existed use the same legacy fallback Route uses. This replaced
+ * an "18% of base + 1% TCS + delivery" estimate that matched neither.
+ */
+export function resolveManualPayoutPaise(order: any): { sellerPayoutPaise: number; source: "snapshot" | "legacy" } {
+  const snapshotPayout = order?.pricingSnapshot?.sellerPayoutPaise;
+  if (typeof snapshotPayout === "number") {
+    return { sellerPayoutPaise: Math.round(snapshotPayout), source: "snapshot" };
+  }
+  return { sellerPayoutPaise: calculateLegacyFallbackPayout(order), source: "legacy" };
+}
+
 export const getPendingPayoutsAdmin = query({
   args: {},
   handler: async (ctx) => {
@@ -1487,24 +1344,16 @@ export const getPendingPayoutsAdmin = query({
       const current = boutiqueMap.get(order.boutiqueId)!;
       current.pendingOrdersCount += 1;
 
-      // Logic: 18% fee + 1% TCS
-      const base = order.subtotal || 0;
-      const hiveFee = Math.round(base * 0.18);
-      const logisticsDrag = order.deliveryFee || 0;
-      const gstTcs = Math.round(base * 0.01);
-      const netDisbursement = gross - hiveFee - logisticsDrag - gstTcs;
-
-      current.netLiability += netDisbursement;
+      const payout = resolveManualPayoutPaise(order);
+      current.netLiability += payout.sellerPayoutPaise;
       current.orders.push({
         _id: order._id,
         orderNumber: order.orderNumber,
         createdAt: order.createdAt,
-        baseItemValue: base,
         customerPaid: gross,
-        hiveFee,
-        logisticsDrag,
-        gstTcs,
-        netDisbursement,
+        hiveKeeps: Math.max(0, gross - payout.sellerPayoutPaise),
+        netDisbursement: payout.sellerPayoutPaise,
+        payoutSource: payout.source,
       });
     }
 

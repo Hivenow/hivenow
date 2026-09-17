@@ -10,11 +10,10 @@ import { Id } from "./_generated/dataModel";
 import { incrementBoutiqueOrderCount } from "./lib/boutiqueCounters";
 import { validateProductSizeAndStock, MOCK_INVENTORY } from "./lib/mockInventory";
 import { internal } from "./_generated/api";
-import { calculateDeliveryFeeRupees } from "./lib/deliveryPricing";
 import { anyApi } from "convex/server";
 import { parseMoney } from "./lib/money";
 import { calculateDeliveryQuoteAction } from "./routing";
-import { calculateItemFinancials, calculateBoutiquePayout, calculateStoreSettlement, getPlatformConfig, calculateCheckoutPricing, calculateSellerItemPricing, calculateAllInclusivePricePaise } from "./pricingService";
+import { getPlatformConfig, calculateCheckoutPricing, calculateSellerItemPricing, calculateAllInclusivePricePaise } from "./pricingService";
 
 import { checkRateLimit } from "./lib/rateLimit";
 import { triggerNotification } from "./lib/notifications";

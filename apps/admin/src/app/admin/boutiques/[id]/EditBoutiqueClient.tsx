@@ -28,7 +28,6 @@ export function EditBoutiqueClient({ boutiqueId }: { boutiqueId: string }) {
   // Fetch boutique details
   const boutique = useQuery(api.boutiques.getBoutiqueById, boutiqueId ? { id: boutiqueId as any } : "skip");
   const updateBoutique = useMutation(api.boutiques.updateBoutique);
-  const platformSettings = useQuery(api.adminSettings.getPlatformSettings);
 
   // Form State
   const [boutiqueName, setBoutiqueName] = useState("");
@@ -428,7 +427,7 @@ export function EditBoutiqueClient({ boutiqueId }: { boutiqueId: string }) {
                 <option value="gold">Gold</option>
               </select>
               <p className="text-[11px] text-hive-text-muted leading-snug">
-                This determines the platform markup price slabs applied to this seller's products. Changes take effect on next product save or price sync.
+                Sets this store's handling fee, platform fee and commission rates. Its shop prices are recalculated automatically when you save.
               </p>
             </div>
           </div>

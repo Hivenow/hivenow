@@ -12,14 +12,8 @@ import {
   DEFAULT_PLATFORM_FEE_PAISE,
   DEFAULT_GST_RATE_PERCENT,
   validateTierSlabs,
-  calculateAllInclusivePrice,
   calculateAllInclusivePricePaise,
   getPlatformConfig as fetchPlatformConfig,
-  // Legacy exports for backward compat
-  calculateProductPricing,
-  PlatformSettings,
-  DEFAULT_TIER_SLABS,
-  getPlatformSettings as fetchPlatformSettings,
 } from "./pricingService";
 
 // ─── v3: Dynamic Tier Commission Slabs & Platform Config ─────────────────────
@@ -137,155 +131,12 @@ export const updatePlatformConfig = mutation({
 
 // ─── Legacy v1 API (kept for backward compat) ───────────────────────────────
 
-/** @deprecated Use getPlatformConfig instead */
-export const getPlatformSettings = query({
-  args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.db.query("platformSettings").first();
-    if (!settings) {
-      return { 
-        markupRate: 0.15, 
-        platformFeeRate: 0.02,
-        markupType: "tiered" as const,
-        markupTiers: DEFAULT_TIER_SLABS,
-      };
-    }
-    return {
-      ...settings,
-      markupType: (settings as any).markupType ?? "tiered",
-      markupTiers: (settings as any).markupTiers ?? DEFAULT_TIER_SLABS,
-    };
-  },
-});
 
-/** @deprecated Use updatePlatformConfig instead */
-export const syncOfficialHiveSlabs = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.db.query("platformSettings").first();
-    const data: any = {
-      handlingChargePaise: DEFAULT_HANDLING_CHARGE_PAISE,
-      platformFeePaise: DEFAULT_PLATFORM_FEE_PAISE,
-      gstRatePercent: DEFAULT_GST_RATE_PERCENT,
-      commissionTiers: DEFAULT_COMMISSION_TIERS,
-      updatedAt: Date.now(),
-    };
-    if (settings) {
-      await ctx.db.patch(settings._id, data);
-      return "Updated platformSettings with v2 commission-based defaults.";
-    } else {
-      await ctx.db.insert("platformSettings", data);
-      return "Created platformSettings with v2 commission-based defaults.";
-    }
-  },
-});
 
-const tierSlabValidator = v.object({
-  min_price: v.number(),
-  max_price: v.union(v.number(), v.null()),
-  rate: v.number()
-});
 
-const tierConfigValidator = v.optional(v.object({
-  name: v.string(),
-  slabs: v.array(tierSlabValidator),
-}));
 
-/** @deprecated Use updatePlatformConfig instead */
-export const updatePlatformSettings = mutation({
-  args: {
-    markupRate: v.number(),
-    platformFeeRate: v.number(),
-    markupType: v.union(v.literal("flat"), v.literal("tiered")),
-    markupTiers: v.array(tierSlabValidator),
-    tier1: tierConfigValidator,
-    tier2: tierConfigValidator,
-    tier3: tierConfigValidator,
-  },
-  handler: async (ctx, args) => {
-    await requireRole(ctx, "admin");
-    const settings = await ctx.db.query("platformSettings").first();
-    
-    const patchData: any = {
-      markupRate: args.markupRate,
-      platformFeeRate: args.platformFeeRate,
-      markupType: args.markupType,
-      markupTiers: args.markupTiers,
-      updatedAt: Date.now(),
-    };
-    if (args.tier1 !== undefined) patchData.tier1 = args.tier1;
-    if (args.tier2 !== undefined) patchData.tier2 = args.tier2;
-    if (args.tier3 !== undefined) patchData.tier3 = args.tier3;
 
-    if (settings) {
-      await ctx.db.patch(settings._id, patchData);
-    } else {
-      await ctx.db.insert("platformSettings", patchData);
-    }
 
-    return { success: true, updatedProductsCount: 0 };
-  },
-});
-
-/**
- * Whether a caller-supplied secret may update platform pricing configuration.
- *
- * The previous check was `if (expectedSecret && args.secret && args.secret !== expectedSecret)`,
- * which FAILED OPEN: omitting the secret entirely made the guard's condition falsy, so an
- * unauthenticated caller could rewrite markup rates, platform fee rates and tier slabs.
- *
- * Fails closed on all three cases now, mirroring updateBoutiqueKycStatus in convex/boutiques.ts:
- * no server secret configured, no secret supplied, or a mismatch. Exported as a pure predicate so
- * it can be tested without the Convex runtime.
- */
-export function isPlatformApiSecretValid(
-  expectedSecret: string | undefined,
-  providedSecret: string | undefined
-): boolean {
-  if (!expectedSecret) return false;
-  if (!providedSecret) return false;
-  return providedSecret === expectedSecret;
-}
-
-/** @deprecated Use updatePlatformConfig instead */
-export const updatePlatformSettingsFromApi = mutation({
-  args: {
-    secret: v.string(),
-    markupRate: v.number(),
-    platformFeeRate: v.number(),
-    markupType: v.union(v.literal("flat"), v.literal("tiered")),
-    markupTiers: v.array(tierSlabValidator),
-    tier1: tierConfigValidator,
-    tier2: tierConfigValidator,
-    tier3: tierConfigValidator,
-  },
-  handler: async (ctx, args) => {
-    const expectedSecret = process.env.CLERK_SECRET_KEY;
-    if (!isPlatformApiSecretValid(expectedSecret, args.secret)) {
-      throw new Error("Unauthorized: Invalid secret key.");
-    }
-    const settings = await ctx.db.query("platformSettings").first();
-
-    const patchData: any = {
-      markupRate: args.markupRate,
-      platformFeeRate: args.platformFeeRate,
-      markupType: args.markupType,
-      markupTiers: args.markupTiers,
-      updatedAt: Date.now(),
-    };
-    if (args.tier1 !== undefined) patchData.tier1 = args.tier1;
-    if (args.tier2 !== undefined) patchData.tier2 = args.tier2;
-    if (args.tier3 !== undefined) patchData.tier3 = args.tier3;
-
-    if (settings) {
-      await ctx.db.patch(settings._id, patchData);
-    } else {
-      await ctx.db.insert("platformSettings", patchData);
-    }
-
-    return { success: true, updatedProductsCount: 0 };
-  }
-});
 
 /**
  * Bring every product's storefront price in line with its seller base price and
@@ -297,7 +148,7 @@ export const updatePlatformSettingsFromApi = mutation({
  * adjustment on every settings save. A product with no base price is skipped
  * and reported rather than guessed at.
  */
-async function syncStorefrontPrices(ctx: any) {
+export async function syncStorefrontPrices(ctx: any) {
   const config = await fetchPlatformConfig(ctx);
   const products = await ctx.db.query("products").collect();
   const boutiques = await ctx.db.query("boutiques").collect();

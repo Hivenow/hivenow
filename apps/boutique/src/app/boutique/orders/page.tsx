@@ -462,7 +462,7 @@ export default function BoutiqueOrders() {
                         <span className="md:hidden text-[10px] font-extrabold text-[#94a3b8] uppercase tracking-wider block mb-1">Net Payout</span>
                         <div className="flex flex-col">
                           <span className="text-sm font-bold text-slate-900">
-                            ₹{Math.round((order.totalPayout ?? order.orderSnapshot?.merchantPayable ?? (order.total * 0.98)) / 100).toLocaleString("en-IN")}
+                            ₹{Math.round((order.totalPayout ?? order.orderSnapshot?.merchantPayable ?? 0) / 100).toLocaleString("en-IN")}
                           </span>
                           <span className="text-[10px] font-normal text-slate-400">
                             {order.sellerFundedDiscountPaise > 0

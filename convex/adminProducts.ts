@@ -10,8 +10,6 @@ import { updateBoutiqueProductCount } from "./boutiques";
 import { getPublicUrl, extractR2ObjectKeys } from "./media/api";
 import { getAllowedSpecKeys, validateAndCleanProductDetails, validateProductDetailsForCategory } from "./lib/verticals";
 import {
-  getPlatformSettings,
-  calculateProductPricing,
   getPlatformConfig,
   calculateAllInclusivePricePaise,
   calculateTierPlatformCharges,

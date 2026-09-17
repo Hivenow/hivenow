@@ -5,7 +5,6 @@
 import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { calculateDeliveryFeeRupees, estimateCourierCostRupees } from "./lib/deliveryPricing";
 import { haversineKm } from "./lib/serviceability";
 
 /**

@@ -1,14 +1,13 @@
 // convex/tests/p0HotfixTest.ts
 // Regression tests for the three P0 security fixes from the abuse & traffic audit:
 //   1. insertMockData      — unauthenticated destructive reseed
-//   2. updatePlatformSettingsFromApi — fail-open secret check
+//   2. (removed with updatePlatformSettingsFromApi, the legacy markup settings API)
 //   3. WhatsApp POST webhook — missing signature verification
 //
 // Each fix exposes a pure predicate so the security decision can be tested here without
 // standing up the Convex runtime, matching the pattern in signatureTest.ts.
 
 import { isSeedingAllowed } from "../seedMutations";
-import { isPlatformApiSecretValid } from "../adminSettings";
 import {
   verifyMetaSignature,
   countStatusUpdates,
@@ -66,27 +65,6 @@ function testSeedingGate() {
   // The intended dev/QA seed path stays functional.
   assertEqual("development + debug enabled -> allowed", isSeedingAllowed("development", "true"), true);
   assertEqual("test + debug enabled -> allowed", isSeedingAllowed("test", "true"), true);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. updatePlatformSettingsFromApi secret validation
-// ─────────────────────────────────────────────────────────────────────────────
-function testPlatformSecret() {
-  console.log("\n── updatePlatformSettingsFromApi secret validation ──");
-
-  // The exact regression: an omitted secret used to pass the old guard.
-  assertEqual("omitted secret -> rejected", isPlatformApiSecretValid("real_secret", undefined), false);
-  assertEqual("empty secret -> rejected", isPlatformApiSecretValid("real_secret", ""), false);
-  assertEqual("wrong secret -> rejected", isPlatformApiSecretValid("real_secret", "guess"), false);
-
-  // Fails closed when the server itself has no secret configured, rather than
-  // treating "nothing to compare against" as permission.
-  assertEqual("no server secret + no client secret -> rejected", isPlatformApiSecretValid(undefined, undefined), false);
-  assertEqual("no server secret + client secret -> rejected", isPlatformApiSecretValid(undefined, "anything"), false);
-  assertEqual("empty server secret -> rejected", isPlatformApiSecretValid("", "anything"), false);
-
-  // Legitimate admin path still works.
-  assertEqual("matching secret -> accepted", isPlatformApiSecretValid("real_secret", "real_secret"), true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,7 +147,6 @@ async function testWhatsAppWebhook() {
 
 export async function runP0HotfixTests() {
   testSeedingGate();
-  testPlatformSecret();
   await testWhatsAppWebhook();
 
   console.log(`\nTest Summary: ${passed} passed, ${failed} failed.\n`);

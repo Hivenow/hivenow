@@ -187,8 +187,8 @@ export default function PayoutReconciliation() {
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-slate-600">Base Item Value: <span className="font-semibold text-slate-800">{formatCurrency(o.baseItemValue)}</span></span>
                         <span className="text-slate-600">Customer Paid: <span className="font-semibold text-slate-800">{formatCurrency(o.customerPaid)}</span></span>
+                        <span className="text-slate-600">Seller Payout: <span className="font-semibold text-slate-800">{formatCurrency(o.netDisbursement)}</span></span>
                       </div>
                     </div>
                   ))}
@@ -204,25 +204,20 @@ export default function PayoutReconciliation() {
                     <div key={o._id} className="flex flex-col gap-1.5 pb-3 mb-3 border-b border-slate-200/60 last:border-0 last:pb-0 last:mb-0">
                       <div className="text-[10px] font-bold text-slate-400 mb-1 font-sans">{o.orderNumber} Breakdown</div>
                       <div className="flex justify-between text-slate-700">
-                        <span>Gross Customer Funds (w/ GST):</span>
+                        <span>Customer paid:</span>
                         <span className="text-emerald-700">+{formatCurrency(o.customerPaid)}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
-                        <span>- Hive Platform Fee (18% of Base):</span>
-                        <span className="text-red-600">-{formatCurrency(o.hiveFee)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span>- Shiprocket Logistics Drag:</span>
-                        <span className="text-red-600">-{formatCurrency(o.logisticsDrag)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-600">
-                        <span>- Statutory GST TCS (1% of Base):</span>
-                        <span className="text-red-600">-{formatCurrency(o.gstTcs)}</span>
+                        <span>- Kept by Hive (fees, commission, GST, delivery):</span>
+                        <span className="text-red-600">-{formatCurrency(o.hiveKeeps)}</span>
                       </div>
                       <div className="flex justify-between font-bold text-slate-800 pt-1.5 mt-1 border-t border-slate-200 border-dashed">
-                        <span>Order Net:</span>
+                        <span>Seller payout:</span>
                         <span>={formatCurrency(o.netDisbursement)}</span>
                       </div>
+                      {o.payoutSource === "legacy" && (
+                        <div className="text-[10px] text-amber-700 font-sans">Older order without a saved price split: payout estimated from order totals.</div>
+                      )}
                     </div>
                   ))}
 

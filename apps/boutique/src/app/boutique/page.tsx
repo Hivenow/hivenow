@@ -78,7 +78,7 @@ export default function BoutiqueDashboard() {
   const products = useQuery(api.products.getBoutiqueProducts);
   const orders = useQuery(api.orders.getBoutiqueOrders);
   const tierStats = useQuery(api.boutiques.getBoutiqueTierAndStats, boutique ? { boutiqueId: boutique._id } : "skip");
-  const platformSettings = useQuery(api.adminSettings.getPlatformSettings);
+  const platformConfig = useQuery(api.adminSettings.getPlatformConfig);
 
   const toggleAvailability = useMutation(api.boutiques.toggleBoutiqueAvailability);
   const updateStatus = useMutation(api.boutiques.updateStoreStatus);
@@ -204,14 +204,8 @@ export default function BoutiqueDashboard() {
         ?.filter(isCreatedToday)
         ?.filter(isActiveOrder)
         ?.reduce((sum: number, o: any) => {
-          let payoutPaise = o.totalPayout;
-          if (payoutPaise == null || payoutPaise <= 0) {
-            payoutPaise = o.totalBasePrice
-              ? Math.round(o.totalBasePrice * 0.98)
-              : o.subtotal
-              ? Math.round(o.subtotal * 0.98)
-              : Math.round((o.total ?? 0) * 0.98);
-          }
+          // Server payout: the frozen price split, or the item-based figure for older orders.
+          const payoutPaise = o.totalPayout ?? 0;
           return sum + (payoutPaise / 100);
         }, 0) ?? 0
     );
@@ -238,14 +232,7 @@ export default function BoutiqueDashboard() {
       const diffTime = today.getTime() - orderDate.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       if (diffDays >= 0 && diffDays < 7) {
-        let payoutPaise = o.totalPayout;
-        if (payoutPaise == null || payoutPaise <= 0) {
-          payoutPaise = o.totalBasePrice
-            ? Math.round(o.totalBasePrice * 0.98)
-            : o.subtotal
-            ? Math.round(o.subtotal * 0.98)
-            : Math.round((o.total ?? 0) * 0.98);
-        }
+        const payoutPaise = o.totalPayout ?? 0;
         dailyTotals[6 - diffDays] += Math.round(payoutPaise / 100);
       }
     });
@@ -709,10 +696,12 @@ export default function BoutiqueDashboard() {
 
               {/* Pricing Tier — read-only, admin-assigned */}
               {(() => {
-                const pt = (boutique as any)?.pricingTier || "tier1";
-                const tierDisplayName = pt === "tier1" ? ((platformSettings as any)?.tier1?.name || "Tier 1")
-                  : pt === "tier2" ? ((platformSettings as any)?.tier2?.name || "Tier 2")
-                  : ((platformSettings as any)?.tier3?.name || "Tier 3");
+                const LEGACY_TIER_KEYS: Record<string, string> = { tier1: "bronze", tier2: "silver", tier3: "gold" };
+                const rawTier = String((boutique as any)?.pricingTier || "bronze").toLowerCase();
+                const tierKey = LEGACY_TIER_KEYS[rawTier] || rawTier;
+                const tierDisplayName =
+                  (platformConfig as any)?.tiers?.find((t: any) => String(t.key).toLowerCase() === tierKey)?.name ||
+                  tierKey.charAt(0).toUpperCase() + tierKey.slice(1);
                 return (
                   <StatusRow
                     title="Pricing Tier"

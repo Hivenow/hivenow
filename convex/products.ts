@@ -32,11 +32,7 @@ import {
 } from "./lib/verticals";
 import { internal } from "./_generated/api";
 import {
-  getPlatformMarkupRate,
-  getPlatformSettings,
   getPlatformConfig,
-  calculateProductPricing,
-  calculateAllInclusivePrice,
   calculateAllInclusivePricePaise,
   DEFAULT_COMMISSION_TIERS,
   DEFAULT_HANDLING_CHARGE_PAISE,

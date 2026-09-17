@@ -4,8 +4,8 @@ import type { Id } from "./_generated/dataModel";
 import { requireRole } from "./lib/auth";
 import { VerticalTypeValidator } from "./schema";
 import { validateFields, type AttributeField } from "./attributeSets";
-import { getPlatformMarkupRate } from "./pricingHelpers";
-import { calculateProductPricing, DEFAULT_TIER_SLABS, getPlatformConfig, calculateAllInclusivePricePaise } from "./pricingService";
+import { getPlatformConfig, calculateAllInclusivePricePaise } from "./pricingService";
+import { syncStorefrontPrices } from "./adminSettings";
 
 
 
@@ -280,86 +280,7 @@ export const fixSeedProductSlugSpaces = internalMutation({
   }
 });
 
-/**
- * Phase 1 Migration: Set basePrice and bump customer price by 15%
- */
-export const migrateProductPricesPhase1 = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity !== null) {
-      await requireRole(ctx, "admin");
-    }
 
-    // 1. Migrate Products
-    const products = await ctx.db.query("products").collect();
-    let updatedProducts = 0;
-    
-    for (const product of products) {
-      if (product.basePrice === undefined) {
-        const basePrice = product.price; // Treat current price as basePrice
-        const newCustomerPrice = Math.floor(basePrice * 1.15); // Add 15% markup
-        
-        await ctx.db.patch(product._id, {
-          basePrice: basePrice,
-          price: newCustomerPrice,
-        });
-        updatedProducts++;
-      }
-    }
-
-    // 2. Migrate Product Variants
-    const variants = await ctx.db.query("productVariants").collect();
-    let updatedVariants = 0;
-    
-    for (const variant of variants) {
-      if (variant.basePrice === undefined) {
-        const basePrice = variant.price;
-        const newCustomerPrice = Math.floor(basePrice * 1.15);
-        
-        await ctx.db.patch(variant._id, {
-          basePrice: basePrice,
-          price: newCustomerPrice,
-        });
-        updatedVariants++;
-      }
-    }
-
-    return `Successfully migrated ${updatedProducts} products and ${updatedVariants} variants to the new pricing model.`;
-  },
-});
-
-/**
- * Migration to seed/backfill platformSettings with the default tiered slabs.
- */
-export const migratePlatformSettingsToTiered = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (identity !== null) {
-      await requireRole(ctx, "admin");
-    }
-
-    const settings = await ctx.db.query("platformSettings").first();
-    if (settings) {
-      await ctx.db.patch(settings._id, {
-        markupType: "tiered",
-        markupTiers: DEFAULT_TIER_SLABS,
-        updatedAt: Date.now()
-      });
-      return "Successfully updated existing platform settings with tiered slabs.";
-    } else {
-      await ctx.db.insert("platformSettings", {
-        markupRate: 0.15,
-        platformFeeRate: 0.02,
-        markupType: "tiered",
-        markupTiers: DEFAULT_TIER_SLABS,
-        updatedAt: Date.now()
-      });
-      return "Successfully seeded new platform settings with default tiered slabs.";
-    }
-  }
-});
 
 /**
  * Migration to recalculate all product prices according to all-inclusive upfront pricing.
@@ -372,60 +293,9 @@ export const recalculateAllProductPrices = internalMutation({
     if (identity !== null) {
       await requireRole(ctx, "admin");
     }
-
-    const config = await getPlatformConfig(ctx);
-    const products = await ctx.db.query("products").collect();
-    let updatedCount = 0;
-    const now = Date.now();
-
-    // Preload all boutiques to resolve pricing tiers in O(1)
-    const boutiques = await ctx.db.query("boutiques").collect();
-    const boutiqueTierMap = new Map<string, string>();
-    for (const b of boutiques) {
-      boutiqueTierMap.set(b._id, (b as any).pricingTier || "bronze");
-    }
-
-    for (const product of products) {
-      let basePrice = product.basePrice ?? product.price;
-      let baseDiscountPrice = product.baseDiscountPrice ?? product.discountPrice;
-
-      if (!basePrice || basePrice <= 0) {
-        basePrice = product.price;
-        baseDiscountPrice = product.discountPrice;
-      }
-
-      // Sanitize basePrice to clean integer paise (e.g. 90000 paise for ₹900)
-      if (basePrice % 100 !== 0) {
-        if (Math.abs((basePrice - 57.82) % 100) < 1) {
-          basePrice = Math.round(basePrice - 57.82);
-        } else {
-          basePrice = Math.round(basePrice / 100) * 100;
-        }
-      }
-      if (baseDiscountPrice && baseDiscountPrice % 100 !== 0) {
-        if (Math.abs((baseDiscountPrice - 57.82) % 100) < 1) {
-          baseDiscountPrice = Math.round(baseDiscountPrice - 57.82);
-        } else {
-          baseDiscountPrice = Math.round(baseDiscountPrice / 100) * 100;
-        }
-      }
-
-      const tierKey = boutiqueTierMap.get(product.boutiqueId) || "bronze";
-      const targetPrice = calculateAllInclusivePricePaise(basePrice, tierKey, config);
-      const targetDiscountPrice = baseDiscountPrice ? calculateAllInclusivePricePaise(baseDiscountPrice, tierKey, config) : undefined;
-
-      await ctx.db.patch(product._id, {
-        basePrice,
-        baseDiscountPrice,
-        price: targetPrice,
-        discountPrice: targetDiscountPrice,
-        updatedAt: now,
-      });
-      updatedCount++;
-    }
-
-
-    return `Successfully recalculated and updated prices for ${updatedCount} products to all-inclusive upfront pricing.`;
+    // Same safe sync the admin button and daily cron use: storefront prices
+    // only, seller base prices never touched.
+    return await syncStorefrontPrices(ctx);
   },
 });
 

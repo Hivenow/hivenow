@@ -170,7 +170,7 @@ export function PushNotificationManager({
         const latest = orders[0];
         let netPayout: number | undefined = undefined;
         if (latest) {
-          const payoutPaise = latest.totalPayout ?? (latest.totalBasePrice ? Math.round(latest.totalBasePrice * 0.98) : Math.round((latest.total ?? 0) * 0.98));
+          const payoutPaise = latest.totalPayout ?? 0;
           netPayout = payoutPaise / 100;
         }
 

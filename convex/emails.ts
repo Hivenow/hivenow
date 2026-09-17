@@ -4,6 +4,7 @@
 import { internalAction, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { calculateLegacyFallbackPayout } from "./razorpayRoute";
 import {
   getNewOrderBoutiqueTemplate,
   getOrderConfirmedCustomerTemplate,
@@ -127,7 +128,12 @@ export const sendOrderEmail = internalAction({
       total: order.total,
       notes: order.notes,
       pdfUrl: invoice?.pdfUrl || undefined,
-      merchantPayable: (order as any).merchantPayable ?? Math.round(order.subtotal * 0.98),
+      // What the seller is actually paid: the frozen price split, then the
+      // settlement snapshot, then the legacy fallback Route uses for old orders.
+      merchantPayable:
+        (order as any).pricingSnapshot?.sellerPayoutPaise ??
+        (order as any).orderSnapshot?.merchantPayable ??
+        calculateLegacyFallbackPayout(order as any),
     };
 
     let subject = "";

@@ -14,10 +14,8 @@ export default function FinanceDashboardPage() {
   const regionalEconomics = useQuery(api.adminFinance.getRegionalEconomicsDashboardAdmin);
 
   const settleOrders = useMutation(api.adminFinance.settleEligibleOrdersAdmin);
-  const seedFinanceData = useMutation(api.adminFinance.seedFinanceMockDataAdmin);
 
   const [processingSettle, setProcessingSettle] = useState(false);
-  const [seeding, setSeeding] = useState(false);
 
   // Formatter helper (paise to INR)
   const formatCurrency = (paise?: number) => {
@@ -38,18 +36,6 @@ export default function FinanceDashboardPage() {
       alert("Failed to settle orders: " + err.message);
     } finally {
       setProcessingSettle(false);
-    }
-  };
-
-  const handleSeedFinance = async () => {
-    setSeeding(true);
-    try {
-      const res = await seedFinanceData();
-      alert(`Successfully seeded financial transactions for ${res.seededCount} historical paid orders!`);
-    } catch (err: any) {
-      alert("Failed to seed finance mock data: " + err.message);
-    } finally {
-      setSeeding(false);
     }
   };
 
@@ -91,19 +77,6 @@ export default function FinanceDashboardPage() {
               <RefreshCw className="w-3.5 h-3.5 text-[#8E867C]" />
             )}
             <span>Settle Eligible Orders</span>
-          </button>
-          
-          <button
-            onClick={handleSeedFinance}
-            disabled={seeding}
-            className="flex items-center gap-2 bg-hive-gold text-hive-dark hover:bg-hive-gold/90 disabled:opacity-50 rounded-xl text-xs py-2.5 px-4 font-extrabold transition-all shadow-sm shadow-hive-gold/10"
-          >
-            {seeding ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Database className="w-3.5 h-3.5" />
-            )}
-            <span>Seed Finance Data</span>
           </button>
         </div>
       </div>
@@ -294,7 +267,7 @@ export default function FinanceDashboardPage() {
                 {(!settlements || settlements.length === 0) && (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">
-                      No settlements logged. Run "Seed Finance Data" to mock order accruals.
+                      No settlements logged yet.
                     </td>
                   </tr>
                 )}
@@ -395,7 +368,7 @@ export default function FinanceDashboardPage() {
               {regionalEconomics && regionalEconomics.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-400 italic">
-                    No regional economics data available. Run "Seed Finance Data" or process payments.
+                    No regional economics data available yet.
                   </td>
                 </tr>
               )}

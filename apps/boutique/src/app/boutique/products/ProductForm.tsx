@@ -141,23 +141,6 @@ const FABRIC_FAMILY_OPTIONS = [
   "Tussar", "Kalamkari", "Mulmul", "Other"
 ];
 
-// Tier 1 Commission Slabs for real-time pricing calculation
-const TIER1_COMMISSION_SLABS = [
-  { min_price: 0, max_price: 499, rate: 2 },
-  { min_price: 500, max_price: 999, rate: 3 },
-  { min_price: 1000, max_price: 1499, rate: 4 },
-  { min_price: 1500, max_price: 4999, rate: 5 },
-  { min_price: 5000, max_price: null, rate: 5 },
-];
-
-const DEFAULT_TIER_SLABS = [
-  { min_price: 0, max_price: 499, rate: 8 },
-  { min_price: 500, max_price: 999, rate: 8 },
-  { min_price: 1000, max_price: 1499, rate: 8 },
-  { min_price: 1500, max_price: 2499, rate: 8 },
-  { min_price: 2500, max_price: 4999, rate: 8 },
-  { min_price: 5000, max_price: null, rate: 5 },
-];
 
 const FASHION_TYPO_DICTIONARY: Record<string, string> = {
   // Kurtis & Tops
