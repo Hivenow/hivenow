@@ -179,16 +179,18 @@ export const getCollection = query({
     // 2. Hydrate
     const hydrated = await CollectionService.hydrateCollection(ctx, collection._id, new Map());
     if (!hydrated) return null;
-    
-    // We can just query products in parallel, or if hydrateCollection doesn't fetch products... wait, hydrateCollection returns productIds.
-    const products = await Promise.all(hydrated.productIds.map(id => ctx.db.get(id as any)));
-    const validProducts = products.filter(Boolean);
 
-    // Ideally, we'd enrich these using the same method.
-    // For Phase 1 commerce grid, just return them.
+    // 3. Batch-fetch and enrich the same way the homepage rails do (CatalogService is what
+    // ContentService.getExperience and getPersonalizedBlocks both use below). Raw ctx.db.get()
+    // documents carry no boutiqueName, so every product on this page showed "Unknown Boutique" —
+    // and carried none of fetchProductsByIds' filtering, so a collection could show a product
+    // that was out of stock, unapproved, or from a suspended boutique, none of which the same
+    // product would survive on a homepage rail.
+    const products = await CatalogService.fetchProductsByIds(ctx, hydrated.productIds);
+
     return {
       collection: hydrated,
-      products: validProducts,
+      products,
     };
   }
 });
