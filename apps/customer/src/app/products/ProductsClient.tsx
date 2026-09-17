@@ -22,6 +22,8 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { QuickViewModal } from "@/components/product/QuickViewModal";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
+import { BoutiqueFilterBanner } from "@/components/catalog/BoutiqueFilterBanner";
+import { Compass } from "lucide-react";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { toQueryCoords } from "@/lib/distance";
 import { CatalogLoadingState } from "@/components/catalog/CatalogLoadingState";
@@ -437,41 +439,26 @@ function ProductsCatalog({
 
       {/* Designer exclusive collections banner */}
       {boutiqueIdFromUrl && (
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 w-full mt-4">
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center bg-amber-200 text-amber-800 rounded-full w-5 h-5 font-extrabold text-[10px]">
-                ✓
-              </span>
-              <span>
-                Showing exclusive collections from{" "}
-                <strong className="font-extrabold">
-                  {activeBoutique?.boutiqueName || "Designer"}
-                </strong>
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search);
-                params.delete("boutiqueId");
-                router.push(`${window.location.pathname}?${params.toString()}`);
-              }}
-              className="text-hive-amber hover:text-hive-gold font-extrabold transition-colors uppercase tracking-wider text-[10px]"
-            >
-              [Clear Filter]
-            </button>
-          </div>
-        </div>
+        <BoutiqueFilterBanner
+          activeBoutique={activeBoutique}
+          onClear={() => {
+            const params = new URLSearchParams(window.location.search);
+            params.delete("boutiqueId");
+            router.push(`${window.location.pathname}?${params.toString()}`);
+          }}
+        />
       )}
 
       {/* Browse-all banner */}
       {browseAll && (
-        <div className="max-w-[1440px] mx-auto px-6 lg:px-8 w-full mt-4">
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
-            <span className="inline-flex items-center justify-center bg-amber-200 text-amber-800 rounded-full w-5 h-5 font-extrabold text-[10px]">
-              !
+        <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 w-full mt-3">
+          <div className="bg-stone-50/90 border border-stone-200/80 text-stone-700 px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2.5 shadow-2xs">
+            <span className="w-5 h-5 rounded-full bg-stone-200/80 text-stone-700 flex items-center justify-center shrink-0">
+              <Compass className="w-3.5 h-3.5" />
             </span>
-            Showing all products — some may not be deliverable to your area.
+            <span className="font-medium">
+              Browsing full catalogue across Kochi — items outside your delivery zone are marked.
+            </span>
           </div>
         </div>
       )}

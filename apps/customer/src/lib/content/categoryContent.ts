@@ -87,7 +87,7 @@ export const CATEGORY_CONTENT: Record<string, CategoryContent> = {
     slug: "men",
     title: "Men's Fashion",
     seoTitle: "Men's Fashion in Ernakulam | Shop Premium Local Stores",
-    metaDescription: "Upgrade your wardrobe with premium men's fashion from Ernakulam's top boutiques. Shop shirts, trousers, and ethnic wear with same-day delivery via Hive.",
+    metaDescription: "Upgrade your wardrobe with premium men's fashion from curated local boutiques. Shop shirts, trousers, and ethnic wear with same-day delivery via Hive.",
     shortDescription: "Discover premium men's clothing from Ernakulam's best stores.",
     intro: "Upgrade your wardrobe with premium men's fashion from trusted local stores. From sharp office wear and casual shirts to traditional ethnic kurtas, Hive connects you with the finest menswear boutiques in the city for a seamless shopping experience.",
     whyHive: defaultWhyHive,
@@ -100,7 +100,7 @@ export const CATEGORY_CONTENT: Record<string, CategoryContent> = {
       },
       {
         question: "What types of men's clothing are available?",
-        answer: "We offer a wide selection including casual wear, formal office attire, ethnic wear, and premium activewear from top local boutiques.",
+        answer: "We offer a wide selection including casual wear, formal office attire, ethnic wear, and premium activewear from curated local boutiques.",
       },
     ],
     relatedCategories: [
@@ -141,7 +141,7 @@ export const CATEGORY_CONTENT: Record<string, CategoryContent> = {
     seoTitle: "Fashion Accessories in Ernakulam | Bags, Jewelry & More",
     metaDescription: "Complete your look with premium accessories from Ernakulam boutiques. Shop handbags, jewelry, and sunglasses with fast same-day delivery on Hive.",
     shortDescription: "Elevate your style with premium accessories.",
-    intro: "Complete your look with premium accessories from Ernakulam's top boutiques. Whether you're searching for elegant jewelry, designer handbags, or chic sunglasses, find the perfect finishing touch and have it delivered today.",
+    intro: "Complete your look with curated accessories from independent local boutiques across Kochi. Whether you're searching for elegant jewelry, designer handbags, or chic sunglasses, find the perfect finishing touch and have it delivered today.",
     whyHive: defaultWhyHive,
     deliveryAreas: defaultDeliveryAreas,
     keywords: ["accessories ernakulam", "jewelry", "handbags", "sunglasses", "boutique accessories"],
