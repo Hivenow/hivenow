@@ -13,6 +13,7 @@ import { restoreCheckoutSessionStock } from "../lib/inventory";
 import { resolveOrderReturnsAccepted, resolveOrderExchangesAccepted } from "../lib/returnPolicy";
 import { applyCouponToOrder } from "../coupons";
 import { recordPromoCouponUsageHelper } from "../promoCoupons";
+import { markOrderPayoutEligible } from "../adminFinance";
 
 // ─── HMAC-SHA256 Signature Verification ──────────────────────────────────────
 async function verifyRazorpayWebhookSignature(
@@ -84,18 +85,11 @@ export const handleRazorpayWebhook = httpAction(async (ctx, request) => {
 
   console.log(`[RazorpayWebhook] Received event: ${eventType} (ID: ${eventId})`);
 
-  // SECURITY: Validate webhook timestamp to prevent replay attacks
-  const eventTimestamp = event.created_at; // Razorpay includes Unix timestamp
-  if (eventTimestamp) {
-    const now = Math.floor(Date.now() / 1000);
-    const age = Math.abs(now - eventTimestamp);
-    const MAX_WEBHOOK_AGE_SECONDS = 300; // 5 minutes
-
-    if (age > MAX_WEBHOOK_AGE_SECONDS) {
-      console.warn(`[RazorpayWebhook] Rejected stale webhook: ${age}s old, eventId=${eventId}`);
-      return new Response('Webhook timestamp outside valid window', { status: 400 });
-    }
-  }
+  // No age limit on events. Razorpay retries a failed delivery for up to 24h
+  // with the original created_at, and this was where a paid order went missing:
+  // a 5-minute window rejected every retry. Replays are already harmless — the
+  // body is HMAC-signed with our secret, and recordWebhookEvent below ignores
+  // an event id it has already processed.
 
   // Record webhook log atomically to prevent concurrent processing races
   const recordResult = await ctx.runMutation(internal.webhooks.razorpay.recordWebhookEvent, {
@@ -111,6 +105,16 @@ export const handleRazorpayWebhook = httpAction(async (ctx, request) => {
   const logId = recordResult.logId!;
 
   try {
+    const disputeData = event.payload?.dispute?.entity;
+    if (typeof eventType === "string" && eventType.startsWith("payment.dispute.") && disputeData) {
+      await ctx.runMutation(internal.webhooks.razorpay.processPaymentDispute, {
+        eventType,
+        disputeId: String(disputeData.id),
+        razorpayPaymentId: String(disputeData.payment_id),
+        amountPaise: Number(disputeData.amount) || 0,
+      });
+    }
+
     const paymentData = event.payload?.payment?.entity;
     if (paymentData) {
       const razorpayOrderId = paymentData.order_id;
@@ -122,6 +126,7 @@ export const handleRazorpayWebhook = httpAction(async (ctx, request) => {
           razorpayOrderId,
           razorpayPaymentId,
           method,
+          capturedAmountPaise: paymentData.amount,
         });
       } else if (eventType === "payment.failed") {
         await ctx.runMutation(internal.webhooks.razorpay.processPaymentFailed, {
@@ -223,6 +228,8 @@ export const processPaymentCaptured = internalMutation({
     razorpayOrderId:   v.string(),
     razorpayPaymentId: v.string(),
     method:            v.string(),
+    /** What Razorpay actually captured, from the signed webhook payload. */
+    capturedAmountPaise: v.number(),
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db
@@ -259,14 +266,56 @@ export const processPaymentCaptured = internalMutation({
 
     const now = Date.now();
 
-    // SECURITY: Validate payment amount matches expected session total
-    const capturedAmountPaise = payment.amount;
-    const expectedAmountPaise = session.total;
-    const tolerancePaise = 100; // ₹1 tolerance for rounding
-
-    if (Math.abs(capturedAmountPaise - expectedAmountPaise) > tolerancePaise) {
-      console.error(`[PaymentCaptured] Amount mismatch: captured=${capturedAmountPaise}, expected=${expectedAmountPaise}`);
-      throw new Error(`Payment amount mismatch: captured ${capturedAmountPaise} paise, expected ${expectedAmountPaise} paise`);
+    // SECURITY: the amount Razorpay actually captured must be exactly what this
+    // checkout charges the customer. `customerPayablePaise` is the total minus
+    // any exchange-coupon credit; comparing against `total` refused every
+    // part-coupon order. On a mismatch no order is placed: the stock is
+    // released, the full captured amount is refunded, and the event is logged
+    // for admin. Returning (not throwing) stops Razorpay retrying forever.
+    const expectedAmountPaise = session.customerPayablePaise ?? session.total;
+    if (args.capturedAmountPaise !== expectedAmountPaise) {
+      console.error(
+        `[PaymentCaptured][ALERT] Amount mismatch for session ${session._id}: ` +
+          `captured=${args.capturedAmountPaise}, expected=${expectedAmountPaise}. Order not placed, refund queued.`
+      );
+      await ctx.db.patch(payment._id, {
+        status: "captured",
+        razorpayPaymentId: args.razorpayPaymentId,
+        method: args.method,
+        updatedAt: now,
+      });
+      await ctx.db.insert("paymentEvents", {
+        source: "razorpay",
+        paymentId: payment._id,
+        eventType: "failed",
+        payload: JSON.stringify({
+          reason: "amount_mismatch_refund",
+          razorpayPaymentId: args.razorpayPaymentId,
+          capturedAmountPaise: args.capturedAmountPaise,
+          expectedAmountPaise,
+        }),
+        createdAt: now,
+      });
+      if (session.status !== "completed" && session.status !== "expired" && session.status !== "failed") {
+        await restoreCheckoutSessionStock(ctx, session);
+        await ctx.db.patch(session._id, { status: "failed" });
+      }
+      const idempotencyKey = `amount_mismatch_${session._id}_${args.razorpayPaymentId}`;
+      const existingRefund = await ctx.db
+        .query("refundQueue")
+        .withIndex("by_idempotencyKey", (q) => q.eq("idempotencyKey", idempotencyKey))
+        .first();
+      if (!existingRefund) {
+        await ctx.db.insert("refundQueue", {
+          paymentId: payment._id,
+          reason: `Captured ₹${(args.capturedAmountPaise / 100).toFixed(2)} but checkout expected ₹${(expectedAmountPaise / 100).toFixed(2)}. Order not placed; automatic refund.`,
+          amountPaise: args.capturedAmountPaise,
+          status: "pending",
+          idempotencyKey,
+          createdAt: now,
+        });
+      }
+      return { success: false, message: "Amount mismatch. Order not placed; refund queued." };
     }
 
     // Check if session is already completed or expired
@@ -782,5 +831,130 @@ export const processPaymentFailed = internalMutation({
     }
 
     return { success: true };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutation: processPaymentDispute (chargebacks)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * A customer's bank has disputed a payment (chargeback).
+ *
+ *   created / under_review / action_required -> "open": freeze the seller's
+ *       held transfer indefinitely. If it was already released, nothing can be
+ *       frozen; a loss is recovered from the seller below.
+ *   won / closed -> the freeze lifts and the normal delivery decision runs
+ *       again (release, or hold to the end of the return window).
+ *   lost -> the bank took the money from Hive, so the seller's share is taken
+ *       back: the transfer is reversed, or, if the seller has already been paid
+ *       out, the amount goes on the ledger recovery list as owed to Hive.
+ *
+ * A final outcome (won/lost/closed) is never moved back to "open" by a late or
+ * out-of-order event, and "lost" is never undone.
+ */
+export const processPaymentDispute = internalMutation({
+  args: {
+    eventType: v.string(),
+    disputeId: v.string(),
+    razorpayPaymentId: v.string(),
+    amountPaise: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const status: "open" | "won" | "lost" | "closed" =
+      args.eventType === "payment.dispute.won" ? "won"
+        : args.eventType === "payment.dispute.lost" ? "lost"
+        : args.eventType === "payment.dispute.closed" ? "closed"
+        : "open";
+
+    const payment = await ctx.db
+      .query("payments")
+      .withIndex("by_razorpayPaymentId", (q) => q.eq("razorpayPaymentId", args.razorpayPaymentId))
+      .first();
+    const session = payment?.razorpayOrderId
+      ? await ctx.db
+          .query("checkoutSessions")
+          .withIndex("by_razorpayOrderId", (q) => q.eq("razorpayOrderId", payment.razorpayOrderId!))
+          .first()
+      : null;
+    const order = session
+      ? await ctx.db
+          .query("orders")
+          .withIndex("by_checkoutSessionId", (q) => q.eq("checkoutSessionId", session._id))
+          .first()
+      : null;
+
+    if (!payment || !order) {
+      console.error(
+        `[Chargeback][ALERT] ${args.eventType} for payment ${args.razorpayPaymentId} (dispute ${args.disputeId}): no matching order. Check Razorpay by hand.`
+      );
+      return { success: false, reason: "order_not_found" };
+    }
+
+    const previous = order.disputeStatus;
+    if (previous === "lost" || (previous && previous !== "open" && status === "open")) {
+      console.warn(`[Chargeback] Ignoring ${args.eventType} for ${order.orderNumber}: dispute already ${previous}.`);
+      return { success: true, reason: `already_${previous}` };
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(order._id, {
+      disputeStatus: status,
+      disputeId: args.disputeId,
+      disputeAmountPaise: args.amountPaise,
+      disputeUpdatedAt: now,
+      updatedAt: now,
+    });
+    console.error(
+      `[Chargeback][ALERT] ${order.orderNumber}: dispute ${args.disputeId} is ${status} ` +
+        `(₹${(args.amountPaise / 100).toFixed(2)}, payout ${order.payoutStatus ?? "none"}).`
+    );
+
+    const payoutReleased =
+      order.payoutStatus === "paid" || order.payoutStatus === "settled";
+
+    if (status === "open") {
+      if (order.razorpayTransferId && !payoutReleased && order.transferStatus !== "reversed") {
+        await ctx.scheduler.runAfter(0, internal.razorpayRoute.updateTransferHold, {
+          orderId: order._id,
+          onHold: true,
+          reason: "dispute_open",
+        });
+      }
+      return { success: true, reason: payoutReleased ? "open_payout_already_released" : "open_frozen" };
+    }
+
+    if (status === "won" || status === "closed") {
+      if (order.payoutHoldReason === "dispute_open") {
+        await ctx.db.patch(order._id, { payoutHoldReason: "awaiting_delivery" });
+      }
+      if (order.status === "delivered") {
+        await markOrderPayoutEligible(ctx, order._id, order.deliveredAt ?? now, now);
+      }
+      return { success: true, reason: `resolved_${status}` };
+    }
+
+    // status === "lost": take the seller's share of the disputed amount back.
+    const sellerPayoutPaise = order.pricingSnapshot?.sellerPayoutPaise ?? 0;
+    const sellerSharePaise =
+      payment.amount > 0
+        ? Math.min(sellerPayoutPaise, Math.round((sellerPayoutPaise * args.amountPaise) / payment.amount))
+        : sellerPayoutPaise;
+
+    if (order.razorpayTransferId && order.transferStatus !== "reversed") {
+      // Reverses the transfer; if the seller has already withdrawn it, this
+      // queues a ledger recovery item for the amount owed.
+      await ctx.scheduler.runAfter(0, internal.razorpayRoute.reverseSellerTransfer, {
+        orderId: order._id,
+        reason: "chargeback_lost",
+        amountPaise: sellerSharePaise,
+      });
+    } else if (!order.razorpayTransferId) {
+      // Nothing was ever sent to the seller; make sure nothing will be.
+      await ctx.db.patch(order._id, {
+        payoutStatus: "not_eligible",
+        payoutHoldReason: "chargeback_lost",
+      });
+    }
+    return { success: true, reason: "lost_recovering_seller_share", sellerSharePaise };
   },
 });

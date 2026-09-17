@@ -30,6 +30,8 @@ export type PayoutHoldOrder = {
   payoutEligibleAt?: number;
   /** Snapshotted at order creation. false === Final Sale. */
   returnsAccepted?: boolean;
+  /** Chargeback state; "open" and "lost" block any payout. */
+  disputeStatus?: string;
 };
 
 /**
@@ -42,7 +44,13 @@ export type PayoutHoldOrder = {
  */
 export function resolvePayoutHoldDecision(
   order: PayoutHoldOrder,
-  deliveredAt: number
+  deliveredAt: number,
+  /**
+   * Pass when the decision may run long after delivery (a chargeback resolved
+   * days later). A return window that has already closed then releases instead
+   * of asking Razorpay for an on_hold_until in the past, which it refuses.
+   */
+  now?: number
 ): PayoutHoldDecision {
   if (order.status !== "delivered") {
     return { action: "skip", reason: "order_not_delivered" };
@@ -66,6 +74,12 @@ export function resolvePayoutHoldDecision(
     return { action: "skip", reason: "transfer_reversed" };
   }
 
+  // A chargeback is open, or was lost: the bank has (or may) take this money
+  // back from Hive, so the seller is not paid until it resolves in Hive's favour.
+  if (order.disputeStatus === "open" || order.disputeStatus === "lost") {
+    return { action: "skip", reason: `chargeback_${order.disputeStatus}` };
+  }
+
   if (order.razorpayTransferId) {
     // A return or unredeemed exchange coupon is holding this open. Only the
     // capture-time placeholder reason yields to the delivery decision.
@@ -77,9 +91,13 @@ export function resolvePayoutHoldDecision(
       return { action: "release", reason: "final_sale_delivered" };
     }
 
+    const onHoldUntil = deliveredAt + RETURN_WINDOW_MS;
+    if (now !== undefined && onHoldUntil <= now + 60_000) {
+      return { action: "release", reason: "return_window_closed" };
+    }
     return {
       action: "hold_until",
-      onHoldUntil: deliveredAt + RETURN_WINDOW_MS,
+      onHoldUntil,
       reason: "return_window_open",
     };
   }

@@ -94,7 +94,12 @@ export function runPromoFundingTests() {
   check("oversized: Hive covers the rest", oversized.platformFundedDiscountPaise, 1000);
 
   console.log(`\nPromo funding tests: ${passed} passed, ${failed} failed`);
-  if (failed > 0) process.exit(1);
+  return { passed, failed };
 }
 
-runPromoFundingTests();
+// argv guard, as in payoutHoldTest.ts: Convex analyses every file in convex/
+// on push, so the tests must not run on import.
+if (typeof process !== "undefined" && process.argv && process.argv[1]?.includes("promoFundingTest")) {
+  const { failed } = runPromoFundingTests();
+  if (failed > 0) process.exit(1);
+}

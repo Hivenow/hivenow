@@ -379,11 +379,11 @@ export const postManualAdjustmentAdmin = mutation({
  * order placed before held transfers existed), this falls back to creating the
  * transfer now, which is the pre-hold behaviour.
  */
-export async function markOrderPayoutEligible(ctx: any, orderId: any, deliveredAt: number) {
+export async function markOrderPayoutEligible(ctx: any, orderId: any, deliveredAt: number, now?: number) {
   const order = await ctx.db.get(orderId);
   if (!order) return { success: false, reason: "order_not_found" };
 
-  const decision = resolvePayoutHoldDecision(order, deliveredAt);
+  const decision = resolvePayoutHoldDecision(order, deliveredAt, now);
 
   switch (decision.action) {
     case "skip":

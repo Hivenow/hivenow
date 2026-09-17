@@ -149,6 +149,36 @@ export function runPayoutHoldTests() {
     { action: "skip", reason: "already_eligible" }
   );
 
+  // ── Chargebacks ──────────────────────────────────────────────────────────
+  check(
+    "Open chargeback blocks release at delivery",
+    resolvePayoutHoldDecision(base({ disputeStatus: "open", returnsAccepted: false }), DELIVERED_AT),
+    { action: "skip", reason: "chargeback_open" }
+  );
+  check(
+    "Lost chargeback blocks post-delivery transfer creation",
+    resolvePayoutHoldDecision(
+      base({ disputeStatus: "lost", razorpayTransferId: undefined, payoutStatus: "pending", payoutHoldReason: undefined }),
+      DELIVERED_AT
+    ),
+    { action: "skip", reason: "chargeback_lost" }
+  );
+  check(
+    "Won chargeback falls through to the normal hold decision",
+    resolvePayoutHoldDecision(base({ disputeStatus: "won" }), DELIVERED_AT),
+    { action: "hold_until", onHoldUntil: DELIVERED_AT + RETURN_WINDOW_MS, reason: "return_window_open" }
+  );
+  check(
+    "Decision made after the return window closed releases instead of holding into the past",
+    resolvePayoutHoldDecision(base({ disputeStatus: "won" }), DELIVERED_AT, DELIVERED_AT + 3 * RETURN_WINDOW_MS),
+    { action: "release", reason: "return_window_closed" }
+  );
+  check(
+    "Decision inside the window with now still holds until the window ends",
+    resolvePayoutHoldDecision(base(), DELIVERED_AT, DELIVERED_AT + 60 * 60 * 1000),
+    { action: "hold_until", onHoldUntil: DELIVERED_AT + RETURN_WINDOW_MS, reason: "return_window_open" }
+  );
+
   console.log(`\nPayout hold: ${passed} passed, ${failed} failed.`);
   return { passed, failed };
 }

@@ -191,19 +191,12 @@ export const getCheckoutPricing = query({
           discountPaise = computePromoDiscountPaise(promoCoupon, allInclusiveSubtotalPaise);
           if (promoCoupon.fundedBy === "seller") sellerFundedDiscountPaise = discountPaise;
         }
-      } else if (args.promoCode === "WELCOME10") {
-        discountPaise = Math.round(allInclusiveSubtotalPaise * 0.10);
-      } else if (args.promoCode === "HIVEFIRST") {
-        discountPaise = Math.min(50000, allInclusiveSubtotalPaise);
       }
 
       // Delivery fee (from dynamic Porter quote passed from frontend)
       let deliveryFeePaise = (args.deliveryFee !== undefined)
         ? Math.round(args.deliveryFee * 100)
         : (productSubtotalPaise >= 1000000 ? 0 : 9900); // ₹99 default
-      if (args.promoCode === "FREESHIP") {
-        deliveryFeePaise = 0;
-      }
 
       // v2: Use pricing engine for authoritative calculation
       const pricing = calculateCheckoutPricing(
@@ -297,24 +290,17 @@ export const initCheckoutSessionInternal = internalMutation({
     userSubject: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let storedQuote: any = null;
-    if (args.quoteId) {
-      storedQuote = await ctx.db.query("checkoutQuotes")
-        .withIndex("by_checkoutSessionId", (q) => q.eq("checkoutSessionId", args.quoteId as string))
-        .first();
-    }
-    
-    if (storedQuote) {
-      const diff = Math.abs(args.deliveryFee - storedQuote.deliveryFee);
-      if (diff > 1) {
-        throw new ConvexError("Delivery fee mismatch. Please refresh and try again.");
-      }
-      if (Date.now() > storedQuote.expiresAt) {
-        throw new ConvexError("Delivery quote expired. Please refresh checkout.");
-      }
-    } else if (args.quotedAt && Date.now() - args.quotedAt > 15 * 60 * 1000) {
-      // Legacy TTL check for backward compatibility if quoteId isn't provided
-      throw new ConvexError("Delivery rate expired. Please refresh the page to get a new rate.");
+    // The delivery fee is never taken from the client. Checkout charges only a
+    // quote the server priced itself (getDeliveryQuoteAction), checked below
+    // against this order's shop, delivery point and cart once those are known.
+    const DELIVERY_PRICE_CHANGED = "Delivery price changed. Please refresh checkout and try again.";
+    const storedQuote = args.quoteId
+      ? await ctx.db.query("checkoutQuotes")
+          .withIndex("by_checkoutSessionId", (q) => q.eq("checkoutSessionId", args.quoteId as string))
+          .first()
+      : null;
+    if (!storedQuote || Date.now() > storedQuote.expiresAt) {
+      throw new ConvexError(DELIVERY_PRICE_CHANGED);
     }
     
     // 1. Verify kill switches
@@ -642,11 +628,10 @@ export const initCheckoutSessionInternal = internalMutation({
       }
       validatedPromoCouponId = promoCoupon._id;
       validatedPromoCouponDiscountPaise = expectedDiscountPaise;
-    } else if (cleanPromoCode === "WELCOME10") {
-      expectedDiscountPaise = Math.round(chargedSubtotalPaise * 0.1);
-    } else if (cleanPromoCode === "HIVEFIRST") {
-      expectedDiscountPaise = Math.min(50000, chargedSubtotalPaise);
     }
+    // Hardcoded codes (WELCOME10, HIVEFIRST, FREESHIP) are gone: the checkout
+    // UI only applies coupons from the promoCoupons table, so they were only
+    // reachable by a hand-crafted request.
 
     // Same ₹1 tolerance as the subtotal check: the client may have rounded.
     if (Math.abs(parseMoney(args.discount) - expectedDiscountPaise) > 100) {
@@ -655,19 +640,20 @@ export const initCheckoutSessionInternal = internalMutation({
       );
     }
 
-    let expectedDeliveryFee: number;
-    if (cleanPromoCode === "FREESHIP") {
-      expectedDeliveryFee = 0;
-    } else if (storedQuote) {
-      // Use the server-stored checkout quote as the authoritative delivery fee
-      expectedDeliveryFee = storedQuote.deliveryFee;
-    } else {
-      // Legacy fallback: trust client value when no stored quote available
-      expectedDeliveryFee = args.deliveryFee;
-    }
-
-    if (Math.abs(args.deliveryFee - expectedDeliveryFee) > 1) {
-      throw new ConvexError(`Delivery fee validation failed. Expected: ₹${expectedDeliveryFee}, Got: ₹${args.deliveryFee}`);
+    // The quote must be for this shop and this delivery point, and for a cart no
+    // bigger than this one (a bigger cart can only unlock free delivery). Quotes
+    // stored before these fields existed carry none of them and are refused.
+    const COORD_TOLERANCE = 0.0005; // ~50 m
+    const quoteMatchesOrder =
+      storedQuote.boutiqueId === String(primaryBoutiqueId) &&
+      typeof storedQuote.userLat === "number" &&
+      typeof storedQuote.userLng === "number" &&
+      Math.abs(storedQuote.userLat - deliveryLat) <= COORD_TOLERANCE &&
+      Math.abs(storedQuote.userLng - deliveryLng) <= COORD_TOLERANCE &&
+      typeof storedQuote.subtotal === "number" &&
+      chargedSubtotalPaise / 100 + 1 >= storedQuote.subtotal;
+    if (!quoteMatchesOrder || Math.abs(args.deliveryFee - storedQuote.deliveryFee) > 1) {
+      throw new ConvexError(DELIVERY_PRICE_CHANGED);
     }
 
     // ─── v2: Authoritative server-side pricing via pricing engine ─────────
@@ -677,7 +663,7 @@ export const initCheckoutSessionInternal = internalMutation({
       quantity: r.item.quantity,
     }));
 
-    const deliveryFeePaise = parseMoney(args.deliveryFee);
+    const deliveryFeePaise = parseMoney(storedQuote.deliveryFee);
     const discountPaise = expectedDiscountPaise;
 
     const pricing = calculateCheckoutPricing(
@@ -2086,6 +2072,40 @@ export const retryFailedRefundAdmin = mutation({
   },
 });
 
+/**
+ * Look for a refund this queue item already created at Razorpay.
+ *
+ * A refund request can succeed at Razorpay while the response is lost (timeout,
+ * dropped connection). The item was then marked failed and a retry refunded the
+ * customer a second time. Every refund carries its queue item id in `notes`, so
+ * asking Razorpay first makes a retry adopt the earlier refund instead.
+ * `idempotencyKey` also matches refunds sent before `refundQueueId` was noted.
+ */
+export async function findExistingRazorpayRefund(
+  authHeader: string,
+  razorpayPaymentId: string,
+  refundQueueId: string,
+  idempotencyKey?: string
+): Promise<{ ok: true; refund: any | null } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(
+      `https://api.razorpay.com/v1/payments/${razorpayPaymentId}/refunds?count=100`,
+      { headers: { Authorization: authHeader } }
+    );
+    if (!res.ok) return { ok: false, error: `${res.status} ${(await res.text()).slice(0, 300)}` };
+    const data = await res.json();
+    const items: any[] = Array.isArray(data?.items) ? data.items : [];
+    const refund = items.find(
+      (r) =>
+        r?.notes?.refundQueueId === refundQueueId ||
+        (!!idempotencyKey && r?.notes?.idempotencyKey === idempotencyKey)
+    );
+    return { ok: true, refund: refund ?? null };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
 export const processRefundQueue = internalAction({
   args: {},
   handler: async (ctx) => {
@@ -2147,8 +2167,31 @@ export const processRefundQueue = internalAction({
           reverseAll = !!relatedOrder?.razorpayTransferId;
         }
 
-        // Call Razorpay Refund API
         const authHeader = btoa(`${razorpayKeyId}:${razorpayKeySecret}`);
+
+        // Never refund twice: adopt a refund this item already created. If
+        // Razorpay can't be asked, don't send — the item fails and retries later.
+        const existing = await findExistingRazorpayRefund(
+          `Basic ${authHeader}`,
+          payment.razorpayPaymentId,
+          String(refundItem._id),
+          refundItem.idempotencyKey
+        );
+        if (!existing.ok) {
+          throw new ConvexError(`Could not check existing refunds at Razorpay: ${existing.error}`);
+        }
+        if (existing.refund) {
+          await ctx.runMutation(internal.payments.completeRefundQueueItem, {
+            refundQueueId: refundItem._id,
+            status: "completed",
+            razorpayRefundId: existing.refund.id,
+          });
+          processedCount++;
+          console.log(`[RefundProcessor] Refund ${refundItem._id} already exists at Razorpay (${existing.refund.id}); recorded without refunding again.`);
+          continue;
+        }
+
+        // Call Razorpay Refund API
         const response = await fetch(
           `https://api.razorpay.com/v1/payments/${payment.razorpayPaymentId}/refund`,
           {
@@ -2164,6 +2207,7 @@ export const processRefundQueue = internalAction({
                 reason: refundItem.reason,
                 orderId: refundItem.orderId ?? "N/A",
                 idempotencyKey: refundItem.idempotencyKey ?? "",
+                refundQueueId: String(refundItem._id),
               },
             }),
           }

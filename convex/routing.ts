@@ -68,6 +68,10 @@ export const storeQuote = internalMutation({
     deliveryFee: v.number(),
     quotedAt: v.number(),
     expiresAt: v.number(),
+    boutiqueId: v.string(),
+    userLat: v.number(),
+    userLng: v.number(),
+    subtotal: v.number(),
   },
   handler: async (ctx, args) => {
     // Delete any existing quote for this ID
@@ -83,6 +87,10 @@ export const storeQuote = internalMutation({
       deliveryFee: args.deliveryFee,
       quotedAt: args.quotedAt,
       expiresAt: args.expiresAt,
+      boutiqueId: args.boutiqueId,
+      userLat: args.userLat,
+      userLng: args.userLng,
+      subtotal: args.subtotal,
     });
   }
 });
@@ -470,6 +478,10 @@ export const getDeliveryQuoteAction = action({
         deliveryFee: result.customerPaidFee / 100, // Convert paise to rupees
         quotedAt: result.quotedAt,
         expiresAt: result.quotedAt + 15 * 60 * 1000, // 15 mins expiry
+        boutiqueId: String(args.boutiqueId),
+        userLat: args.userLat,
+        userLng: args.userLng,
+        subtotal: args.subtotal,
       });
     }
     return result;

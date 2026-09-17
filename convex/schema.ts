@@ -983,6 +983,18 @@ export default defineSchema({
     // exchange coupon is holding it open.
     payoutHoldUntil:      v.optional(v.number()),
     payoutHoldReason:     v.optional(v.string()),
+    // Chargeback raised by the customer's bank (Razorpay payment.dispute.*).
+    // "open" freezes the seller's payout; "lost" takes it back from the seller;
+    // "won"/"closed" let the normal delivery decision release it.
+    disputeStatus:        v.optional(v.union(
+                            v.literal("open"),
+                            v.literal("won"),
+                            v.literal("lost"),
+                            v.literal("closed")
+                          )),
+    disputeId:            v.optional(v.string()),
+    disputeAmountPaise:   v.optional(v.number()),
+    disputeUpdatedAt:     v.optional(v.number()),
     payoutProcessedAt:    v.optional(v.number()),
     payoutFailureReason:  v.optional(v.string()),
     payoutDetails:        v.optional(
@@ -1358,6 +1370,13 @@ export default defineSchema({
     deliveryFee: v.number(),
     quotedAt: v.number(),
     expiresAt: v.number(),
+    // What the quote was priced for. Checkout accepts the quote only for the
+    // same shop, the same delivery point, and a cart at least this large (a
+    // bigger cart can only make delivery cheaper, never dearer).
+    boutiqueId: v.optional(v.string()),
+    userLat: v.optional(v.number()),
+    userLng: v.optional(v.number()),
+    subtotal: v.optional(v.number()),
   }).index("by_checkoutSessionId", ["checkoutSessionId"]),
 
   paymentEvents: defineTable({

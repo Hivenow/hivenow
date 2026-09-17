@@ -840,6 +840,12 @@ export const createSellerTransfer = internalAction({
       return { success: false, reason: "not_delivered" };
     }
 
+    // ── Chargeback: never pay out while one is open or after it was lost ─────
+    if (order.disputeStatus === "open" || order.disputeStatus === "lost") {
+      log("chargeback", { disputeStatus: order.disputeStatus });
+      return { success: false, reason: `chargeback_${order.disputeStatus}` };
+    }
+
     // ── Pre-existing dispute protection (unchanged business rule) ────────────
     const hasActiveClaims = await ctx.runQuery((internal.claims as any).getOpenClaimByOrderId, {
       orderId: args.orderId,
