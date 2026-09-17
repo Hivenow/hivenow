@@ -240,26 +240,11 @@ export const getCheckoutPricing = query({
         sellerCommissionPercent: pricing.sellerCommissionPercent,
       };
     } catch (err) {
-      console.error("[getCheckoutPricing] FALLBACK triggered:", err);
-      const fallbackSubtotalPaise = args.items.reduce((sum, i) => sum + Math.round(i.price * 100) * i.quantity, 0);
-      const fallbackDeliveryPaise = (args.deliveryFee !== undefined) ? Math.round(args.deliveryFee * 100) : (fallbackSubtotalPaise >= 1000000 ? 0 : 9900);
-      const fallbackTotalPaise = Math.max(0, fallbackSubtotalPaise + fallbackDeliveryPaise);
-      return {
-        productSubtotalRupees: fallbackSubtotalPaise / 100,
-        productSubtotalPaise: fallbackSubtotalPaise,
-        subtotalRupees: fallbackSubtotalPaise / 100,
-        subtotalPaise: fallbackSubtotalPaise,
-        handlingChargeRupees: 0, handlingChargePaise: 0,
-        platformFeeRupees: 0, platformFeePaise: 0,
-        gstOnChargesRupees: 0, gstOnChargesPaise: 0,
-        gstRupees: 0, gstPaise: 0,
-        deliveryFeeRupees: fallbackDeliveryPaise / 100,
-        deliveryFeePaise: fallbackDeliveryPaise,
-        discountRupees: 0, discountPaise: 0,
-        totalRupees: fallbackTotalPaise / 100,
-        totalPaise: fallbackTotalPaise,
-        items: [],
-      };
+      // No fallback to the client's prices: those showed the shopper a total
+      // checkout would then refuse. null tells the page prices are unavailable,
+      // so it shows an error and keeps Pay disabled.
+      console.error("[getCheckoutPricing][ALERT] Pricing failed; returning null:", err);
+      return null;
     }
   },
 });
@@ -1470,6 +1455,11 @@ export async function verifyPaymentAndPlaceOrderInternal(
   return { success: true, orderId, orderNumber };
 }
 
+/**
+ * @deprecated Kept only so a customer's already-loaded (older PWA) checkout page
+ * can still place its order. New clients call confirmPaymentAndPlaceOrder, which
+ * also confirms the payment with Razorpay. Remove once old bundles have aged out.
+ */
 export const verifyPaymentAndPlaceOrder = mutation({
   args: {
     checkoutSessionId: v.id("checkoutSessions"),
@@ -1479,6 +1469,116 @@ export const verifyPaymentAndPlaceOrder = mutation({
   },
   handler: async (ctx, args) => {
     return await verifyPaymentAndPlaceOrderInternal(ctx, args);
+  },
+});
+
+export const placeVerifiedOrderInternal = internalMutation({
+  args: {
+    checkoutSessionId: v.id("checkoutSessions"),
+    razorpayPaymentId: v.string(),
+    razorpaySignature: v.string(),
+    token: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await verifyPaymentAndPlaceOrderInternal(ctx, args);
+  },
+});
+
+export const getSessionPaymentExpectation = internalQuery({
+  args: { checkoutSessionId: v.id("checkoutSessions") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.checkoutSessionId);
+    if (!session) return null;
+    return {
+      razorpayOrderId: session.razorpayOrderId,
+      expectedAmountPaise: session.customerPayablePaise ?? session.total,
+    };
+  },
+});
+
+/** Shown when Razorpay has the payment but the bank has not finished it yet. */
+export const PAYMENT_STILL_CONFIRMING =
+  "Your payment is still being confirmed by your bank. Your order will appear in My Orders within a few minutes. Please don't pay again.";
+
+/**
+ * Place the order after the customer pays, once Razorpay itself confirms it.
+ *
+ * The signature (checked again in the mutation) proves the receipt is genuine,
+ * but not that the money arrived. This asks Razorpay for the payment and
+ * requires: it belongs to this checkout's Razorpay order, it is for exactly
+ * what the customer owes, and it is captured. A payment still `authorized`
+ * (auto-capture pending) is re-checked briefly; if it is still not captured the
+ * customer is told it is confirming, and the payment.captured webhook places the
+ * order when it lands. Mock orders (no Razorpay keys, non-prod) skip the check.
+ */
+export const confirmPaymentAndPlaceOrder = action({
+  args: {
+    checkoutSessionId: v.id("checkoutSessions"),
+    razorpayPaymentId: v.string(),
+    razorpaySignature: v.string(),
+    token: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    const expectation: any = await ctx.runQuery(internal.payments.getSessionPaymentExpectation, {
+      checkoutSessionId: args.checkoutSessionId,
+    });
+    if (!expectation) {
+      throw new ConvexError("Invalid checkout session details.");
+    }
+
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const isMockOrder = String(expectation.razorpayOrderId || "").startsWith("order_mock_");
+
+    if (!isMockOrder) {
+      if (!keyId || !keySecret) {
+        throw new ConvexError("Payments are not configured. Please contact support.");
+      }
+      const authHeader = "Basic " + btoa(`${keyId}:${keySecret}`);
+
+      let payment: any = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+        const res = await fetch(
+          `https://api.razorpay.com/v1/payments/${encodeURIComponent(args.razorpayPaymentId)}`,
+          { headers: { Authorization: authHeader } }
+        );
+        if (!res.ok) {
+          console.error(
+            `[confirmPaymentAndPlaceOrder] Razorpay payment lookup failed (${res.status}) for ${args.razorpayPaymentId}: ${(await res.text()).slice(0, 300)}`
+          );
+          if (res.status >= 400 && res.status < 500) {
+            // Razorpay says this payment id does not exist.
+            throw new ConvexError("We couldn't find this payment. If money was taken from your account, please contact support.");
+          }
+          // Razorpay unavailable; the payment.captured webhook will place the order.
+          throw new ConvexError(PAYMENT_STILL_CONFIRMING);
+        }
+        payment = await res.json();
+        if (payment.status !== "authorized") break;
+      }
+
+      if (payment.order_id !== expectation.razorpayOrderId) {
+        console.error(
+          `[confirmPaymentAndPlaceOrder][ALERT] Payment ${args.razorpayPaymentId} belongs to ${payment.order_id}, not ${expectation.razorpayOrderId}.`
+        );
+        throw new ConvexError("This payment does not match your order. Please contact support.");
+      }
+      if (payment.amount !== expectation.expectedAmountPaise) {
+        console.error(
+          `[confirmPaymentAndPlaceOrder][ALERT] Payment ${args.razorpayPaymentId} is ${payment.amount} paise, checkout expected ${expectation.expectedAmountPaise}.`
+        );
+        throw new ConvexError("This payment does not match your order total. Please contact support.");
+      }
+      if (payment.status === "authorized") {
+        throw new ConvexError(PAYMENT_STILL_CONFIRMING);
+      }
+      if (payment.status !== "captured") {
+        throw new ConvexError("This payment was not completed. You have not been charged for this order.");
+      }
+    }
+
+    return await ctx.runMutation(internal.payments.placeVerifiedOrderInternal, args);
   },
 });
 

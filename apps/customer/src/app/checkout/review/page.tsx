@@ -120,7 +120,8 @@ export default function OrderReviewPage() {
   // Exchange credit is tracked separately from promo codes: a promo reduces the
   // order's value, a coupon only reduces what the customer is charged.
   const [appliedCoupon, setAppliedCoupon] = React.useState<{ code: string; amountPaise: number } | null>(null);
-  const verifyPaymentAndPlaceOrder = useConvexMutation(api.payments.verifyPaymentAndPlaceOrder);
+  // Confirms the payment with Razorpay on the server before placing the order.
+  const verifyPaymentAndPlaceOrder = useAction(api.payments.confirmPaymentAndPlaceOrder);
   const clearCartMutation = useMutation(api.cart.clearCart).withOptimisticUpdate((localStore, args) => {
     const tokenQueryArg = { token: token || undefined };
     const cart = localStore.getQuery(api.cart.getCart, tokenQueryArg);
@@ -250,6 +251,10 @@ export default function OrderReviewPage() {
   const platformFee = backendPricing?.platformFeeRupees ?? 0;
   const gstOnCharges = backendPricing?.gstOnChargesRupees ?? (backendPricing?.gstRupees ?? 0);
   const total = backendPricing?.totalRupees ?? Math.max(0, subtotal - discountAmount + deliveryFee);
+  // undefined = still loading, null = the server could not price this cart.
+  // Pay stays disabled until real server prices are on screen.
+  const pricingFailed = orderItems.length > 0 && backendPricing === null;
+  const pricingReady = orderItems.length === 0 || !!backendPricing;
 
   useEffect(() => {
     let active = true;
@@ -400,6 +405,10 @@ export default function OrderReviewPage() {
   // Payment Handler
   const handlePay = async () => {
     if (isPlacingOrder || isOrderPlacing.current) return;
+    if (!pricingReady) {
+      toast.error(pricingFailed ? "Couldn't load prices. Please try again." : "Prices are still loading.");
+      return;
+    }
     if (!selectedAddress) {
       toast.error("Please select a delivery address first.");
       return;
@@ -630,8 +639,16 @@ export default function OrderReviewPage() {
               setIsPlacingOrder(false);
             }, 500);
           } catch (err) {
-            console.error("Signature verification failed:", err);
-            toast.error("Signature verification failed. Please try again or contact support.");
+            console.error("Payment confirmation failed:", err);
+            // The server writes a shopper-facing reason (still confirming, amount
+            // mismatch, not completed); a paid order is never lost here, the
+            // payment webhook places it.
+            toast.error(
+              getCustomerErrorMessage(
+                err,
+                "We couldn't confirm your payment yet. If you were charged, your order will appear in My Orders shortly."
+              )
+            );
             setIsPlacingOrder(false);
             isOrderPlacing.current = false;
           }
@@ -984,10 +1001,26 @@ export default function OrderReviewPage() {
                 </div>
               )}
 
+              {pricingFailed && (
+                <div role="alert" className="p-3 bg-red-50 border border-red-200/50 rounded-xl flex items-center justify-between gap-3 text-xs text-red-700 font-semibold mt-3">
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                    <span>Couldn&apos;t load prices. Please try again.</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="text-xs font-bold text-red-700 underline underline-offset-2 flex-shrink-0"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               {/* Proceed to Payment CTA */}
               <button
                 type="button"
-                disabled={isPlacingOrder || isQuoteLoading}
+                disabled={isPlacingOrder || isQuoteLoading || !pricingReady}
                 onClick={handlePay}
                 className="w-full h-14 bg-hive-gold text-hive-dark hover:bg-hive-amber active:scale-[0.98] transition-all rounded-lg mt-3 font-semibold uppercase tracking-[0.2em] text-xs flex items-center justify-center gap-2 shadow-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1136,9 +1169,21 @@ export default function OrderReviewPage() {
             </div>
           )}
 
+          {pricingFailed && (
+            <div role="alert" className="flex items-center justify-between gap-3 mb-2 text-xs text-red-700 font-semibold">
+              <span>Couldn&apos;t load prices.</span>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="font-bold underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <SwipeToPayButton
             onComplete={handlePay}
-            disabled={isQuoteLoading}
+            disabled={isQuoteLoading || !pricingReady}
             isProcessing={isPlacingOrder}
             label="Slide to Pay"
           />
