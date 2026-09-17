@@ -45,13 +45,11 @@ export function ProductInspectionDrawer({
   const [description, setDescription] = useState(product?.description || "");
   const [categoryId, setCategoryId] = useState(product?.categoryId || "");
   
-  // Prices in Rupees (DB stores in PAISE, convert on init)
-  const [basePrice, setBasePrice] = useState<number>(
-    product?.basePrice ? Math.round(product.basePrice / 100) : Math.round((product?.price || 0) / 100 / 1.15)
-  );
+  // Seller BASE prices in Rupees (DB stores PAISE). Not rounded, so saving an
+  // untouched ₹999.50 base does not silently become ₹1,000.
+  const [basePrice, setBasePrice] = useState<number>((product?.basePrice ?? product?.price ?? 0) / 100);
   const [baseDiscountPrice, setBaseDiscountPrice] = useState<number | undefined>(
-    product?.baseDiscountPrice ? Math.round(product.baseDiscountPrice / 100)
-      : (product?.discountPrice ? Math.round(product.discountPrice / 100 / 1.15) : undefined)
+    product?.baseDiscountPrice ? product.baseDiscountPrice / 100 : undefined
   );
 
   // Sizing & Inventory
@@ -111,12 +109,14 @@ export function ProductInspectionDrawer({
       ? product.imageUrls
       : (product?.images || []);
   });
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
 
   useEffect(() => {
     const list = (product?.imageUrls && product.imageUrls.length > 0)
       ? product.imageUrls
       : (product?.images || []);
     setImages(list);
+    setSelectedImageIndex(0);
   }, [product]);
 
   const handleCropComplete = useCallback((newUrl?: string, index?: number) => {
@@ -136,95 +136,29 @@ export function ProductInspectionDrawer({
   const approveProduct = useMutation(api.adminProducts.approveProductAdmin);
   const requestChangesProduct = useMutation(api.adminProducts.requestChangesProductAdmin);
 
-  const activeImage = images[0] || "";
+  const safeImageIndex = selectedImageIndex < images.length ? selectedImageIndex : 0;
+  const activeImage = images[safeImageIndex] || "";
 
-  const platformSettings = useQuery(api.adminSettings.getPlatformSettings);
+  // Price split from the server pricing engine (boutique tier, platform config),
+  // the same numbers checkout charges and the seller portal shows.
+  const pricingBreakdown = useQuery(
+    api.adminProducts.getProductPricingPreviewAdmin,
+    product?._id && basePrice > 0 ? { productId: product._id, basePricePaise: Math.round(basePrice * 100) } : "skip"
+  );
+  const discountPricing = useQuery(
+    api.adminProducts.getProductPricingPreviewAdmin,
+    product?._id && baseDiscountPrice && baseDiscountPrice > 0
+      ? { productId: product._id, basePricePaise: Math.round(baseDiscountPrice * 100) }
+      : "skip"
+  );
 
-  const DEFAULT_TIER_SLABS = [
-    { min_price: 0, max_price: 499, rate: 8 },
-    { min_price: 500, max_price: 999, rate: 8 },
-    { min_price: 1000, max_price: 1499, rate: 8 },
-    { min_price: 1500, max_price: 2499, rate: 8 },
-    { min_price: 2500, max_price: 4999, rate: 8 },
-    { min_price: 5000, max_price: null, rate: 5 },
-  ];
-
-  const pricingBreakdown = useMemo(() => {
-    if (!basePrice || isNaN(basePrice) || basePrice <= 0) return null;
-    const settings = platformSettings;
-    const markupType = settings?.markupType ?? "tiered";
-    const tiers = settings?.markupTiers ?? DEFAULT_TIER_SLABS;
-    let markupRate = settings?.markupRate ?? 0.08;
-
-    if (markupType === "tiered" && Array.isArray(tiers) && tiers.length > 0) {
-      const tier = tiers.find((t: any) => {
-        const minMatch = basePrice >= t.min_price;
-        const maxMatch = t.max_price === null || t.max_price === undefined || basePrice <= t.max_price;
-        return minMatch && maxMatch;
-      });
-      if (tier) {
-        markupRate = tier.rate / 100;
-      }
-    }
-
-    const platformFeeRate = settings?.platformFeeRate ?? 0.02;
-    const markupAmount = basePrice * markupRate;
-    const preGstPrice = basePrice + markupAmount + 7;
-    const sellerProcessingFee = basePrice * platformFeeRate;
-    const platformRevenue = markupAmount + sellerProcessingFee + 7;
-    const gstAmount = platformRevenue * 0.18;
-    const allInRaw = preGstPrice + gstAmount;
-    const storefrontPrice = Math.ceil(allInRaw / 10) * 10 - 1;
-    const netPayout = basePrice - sellerProcessingFee;
-
-    return {
-      markupRate,
-      markupAmount,
-      platformFeeRate,
-      sellerProcessingFee,
-      storefrontPrice,
-      netPayout,
-    };
-  }, [basePrice, platformSettings]);
-
-  // Markup price calculation helper for the PDP preview
+  // Storefront prices (rupees) for the PDP preview
   const previewCustomerPrices = useMemo(() => {
-    if (!pricingBreakdown) return { price: 0, discountPrice: undefined, discountPercent: 0 };
-
-    let customerDiscountPrice = undefined;
-    if (baseDiscountPrice && baseDiscountPrice > 0) {
-      const settings = platformSettings;
-      const markupType = settings?.markupType ?? "tiered";
-      const tiers = settings?.markupTiers ?? DEFAULT_TIER_SLABS;
-      let discRate = settings?.markupRate ?? 0.08;
-
-      if (markupType === "tiered" && Array.isArray(tiers) && tiers.length > 0) {
-        const tier = tiers.find((t: any) => {
-          const minMatch = baseDiscountPrice >= t.min_price;
-          const maxMatch = t.max_price === null || t.max_price === undefined || baseDiscountPrice <= t.max_price;
-          return minMatch && maxMatch;
-        });
-        if (tier) discRate = tier.rate / 100;
-      }
-
-      const discMarkup = baseDiscountPrice * discRate;
-      const discPreGst = baseDiscountPrice + discMarkup + 7;
-      const discFee = baseDiscountPrice * (settings?.platformFeeRate ?? 0.02);
-      const discRevenue = discMarkup + discFee + 7;
-      const discGst = discRevenue * 0.18;
-      customerDiscountPrice = Math.ceil((discPreGst + discGst) / 10) * 10 - 1;
-    }
-
-    const discountPercent = customerDiscountPrice
-      ? Math.round(((pricingBreakdown.storefrontPrice - customerDiscountPrice) / pricingBreakdown.storefrontPrice) * 100)
-      : 0;
-
-    return {
-      price: pricingBreakdown.storefrontPrice,
-      discountPrice: customerDiscountPrice,
-      discountPercent,
-    };
-  }, [pricingBreakdown, baseDiscountPrice, platformSettings]);
+    const price = pricingBreakdown ? pricingBreakdown.customerPricePaise / 100 : 0;
+    const discountPrice = baseDiscountPrice && discountPricing ? discountPricing.customerPricePaise / 100 : undefined;
+    const discountPercent = discountPrice && price > 0 ? Math.round(((price - discountPrice) / price) * 100) : 0;
+    return { price, discountPrice, discountPercent };
+  }, [pricingBreakdown, discountPricing, baseDiscountPrice]);
 
   // Fit recommendations config
   const fitRecommendationConfig: Record<string, { label: string; advice: string }> = {
@@ -475,7 +409,7 @@ export function ProductInspectionDrawer({
                             <img src={activeImage} alt="" className="w-full h-full object-cover" />
                             {/* Crop button overlay */}
                             <button
-                              onClick={() => openCropModal(activeImage, 0)}
+                              onClick={() => openCropModal(activeImage, safeImageIndex)}
                               className="absolute top-3 right-3 p-2 rounded-xl bg-white/85 backdrop-blur-md border border-white/40 text-stone-700 hover:bg-white hover:text-amber-700 shadow-lg transition-all opacity-0 group-hover/hero:opacity-100 z-10 cursor-pointer"
                               title="Crop this image"
                             >
@@ -492,20 +426,36 @@ export function ProductInspectionDrawer({
                       
                       {images.length > 1 && (
                         <div className="grid grid-cols-4 gap-2">
-                          {images.map((img: string, idx: number) => (
-                            <div key={idx} className="aspect-[3/4] rounded-lg overflow-hidden border border-stone-200/60 bg-stone-50 relative group/thumb">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={img} alt="" className="w-full h-full object-cover" />
-                              {/* Crop button on thumbnail */}
+                          {images.map((img: string, idx: number) => {
+                            const isSelected = idx === safeImageIndex;
+                            return (
                               <button
-                                onClick={() => openCropModal(img, idx)}
-                                className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-white/85 backdrop-blur-md border border-white/30 text-stone-600 hover:bg-white hover:text-amber-700 shadow transition-all opacity-0 group-hover/thumb:opacity-100 z-10 cursor-pointer"
-                                title={`Crop image ${idx + 1}`}
+                                type="button"
+                                key={idx}
+                                onClick={() => setSelectedImageIndex(idx)}
+                                className={`aspect-[3/4] rounded-lg overflow-hidden border relative group/thumb transition-all cursor-pointer p-0 text-left focus:outline-none ${
+                                  isSelected
+                                    ? "ring-2 ring-stone-900 border-stone-900 shadow-sm opacity-100"
+                                    : "border-stone-200/60 bg-stone-50 opacity-70 hover:opacity-100 hover:border-stone-400"
+                                }`}
                               >
-                                <Crop className="w-3 h-3" />
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={img} alt="" className="w-full h-full object-cover" />
+                                {/* Crop button on thumbnail */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openCropModal(img, idx);
+                                  }}
+                                  className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-white/85 backdrop-blur-md border border-white/30 text-stone-600 hover:bg-white hover:text-amber-700 shadow transition-all opacity-0 group-hover/thumb:opacity-100 z-10 cursor-pointer"
+                                  title={`Crop image ${idx + 1}`}
+                                >
+                                  <Crop className="w-3 h-3" />
+                                </button>
                               </button>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -677,6 +627,30 @@ export function ProductInspectionDrawer({
                         </div>
                       )}
                     </div>
+
+                    {/* Mobile Thumbnails */}
+                    {images.length > 1 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                        {images.map((img: string, idx: number) => {
+                          const isSelected = idx === safeImageIndex;
+                          return (
+                            <button
+                              type="button"
+                              key={idx}
+                              onClick={() => setSelectedImageIndex(idx)}
+                              className={`w-12 h-16 rounded-md overflow-hidden shrink-0 border relative transition-all cursor-pointer p-0 ${
+                                isSelected
+                                  ? "ring-2 ring-stone-900 border-stone-900 opacity-100"
+                                  : "border-stone-200 opacity-60 hover:opacity-100"
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={img} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Main Title Details */}
                     <div className="space-y-0.5 text-left select-none">
@@ -869,7 +843,8 @@ export function ProductInspectionDrawer({
                       <input 
                         type="number" 
                         value={basePrice} 
-                        onChange={(e) => setBasePrice(Math.max(0, parseInt(e.target.value) || 0))}
+                        step="0.01"
+                        onChange={(e) => setBasePrice(Math.max(0, parseFloat(e.target.value) || 0))}
                         className="w-full pl-7 pr-3 py-2 border border-stone-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#C59A5B] bg-white text-stone-855"
                       />
                     </div>
@@ -883,7 +858,7 @@ export function ProductInspectionDrawer({
                         type="number" 
                         value={baseDiscountPrice || ""} 
                         onChange={(e) => {
-                          const val = parseInt(e.target.value);
+                          const val = parseFloat(e.target.value);
                           setBaseDiscountPrice(val > 0 ? val : undefined);
                         }}
                         className="w-full pl-7 pr-3 py-2 border border-stone-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-[#C59A5B] bg-white text-stone-855"
@@ -893,27 +868,34 @@ export function ProductInspectionDrawer({
                 </div>
 
                 {pricingBreakdown && (
-                  <div className="p-3.5 bg-stone-50 border border-stone-200/80 rounded-xl space-y-2 text-xs">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
+                  <div className="p-3.5 bg-stone-50 border border-stone-200/80 rounded-xl text-xs">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
                         <span className="text-[10px] uppercase font-bold text-stone-500 tracking-wider">Storefront Display Price</span>
-                        <p className="text-sm font-bold text-stone-900 font-sans">
-                          ₹{pricingBreakdown.storefrontPrice.toLocaleString("en-IN")}
-                          <span className="text-[10px] text-stone-400 font-normal ml-1">
-                            ({(pricingBreakdown.markupRate * 100).toFixed(0)}% markup + ₹7 + GST)
-                          </span>
-                        </p>
+                        <p className="text-sm font-bold text-stone-900 font-sans">{formatPaise(pricingBreakdown.customerPricePaise)}</p>
+                        <dl className="space-y-0.5 text-[11px] text-stone-500">
+                          <PriceRow label="Base price" paise={Math.round(basePrice * 100)} />
+                          <PriceRow label="Handling fee" paise={pricingBreakdown.handlingChargePaise} />
+                          <PriceRow label="Platform fee" paise={pricingBreakdown.platformFeePaise} />
+                          <PriceRow label="GST on fees" paise={pricingBreakdown.platformChargesGstPaise} />
+                        </dl>
                       </div>
-                      <div>
+                      <div className="space-y-1.5">
                         <span className="text-[10px] uppercase font-bold text-emerald-800 tracking-wider">Seller Net Payout</span>
-                        <p className="text-sm font-bold text-emerald-700 font-sans">
-                          ₹{pricingBreakdown.netPayout.toFixed(2)}
-                          <span className="text-[10px] text-stone-400 font-normal ml-1">
-                            (Base − 2% fee of ₹{pricingBreakdown.sellerProcessingFee.toFixed(2)})
-                          </span>
-                        </p>
+                        <p className="text-sm font-bold text-emerald-700 font-sans">{formatPaise(pricingBreakdown.sellerPayoutPaise)}</p>
+                        <dl className="space-y-0.5 text-[11px] text-stone-500">
+                          <PriceRow label="Base price" paise={Math.round(basePrice * 100)} />
+                          <PriceRow
+                            label={`Commission (${pricingBreakdown.sellerCommissionPercent}%)`}
+                            paise={-pricingBreakdown.sellerCommissionPaise}
+                          />
+                          <PriceRow label="GST on commission" paise={-pricingBreakdown.sellerCommissionGstPaise} />
+                        </dl>
                       </div>
                     </div>
+                    <p className="mt-2.5 pt-2 border-t border-stone-200/80 text-[10px] text-stone-400">
+                      {pricingBreakdown.tierName} tier rates for this boutique
+                    </p>
                   </div>
                 )}
               </div>
@@ -1146,6 +1128,19 @@ export function ProductInspectionDrawer({
         productName={product?.name || ""}
         onCropComplete={handleCropComplete}
       />
+    </div>
+  );
+}
+
+function formatPaise(paise: number) {
+  return "₹" + (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function PriceRow({ label, paise }: { label: string; paise: number }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <dt>{label}</dt>
+      <dd className="font-mono tabular-nums">{paise < 0 ? "−" : ""}{formatPaise(Math.abs(paise))}</dd>
     </div>
   );
 }
