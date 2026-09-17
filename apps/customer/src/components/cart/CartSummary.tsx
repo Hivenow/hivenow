@@ -77,7 +77,7 @@ export const CartSummaryComponent: React.FC<CartSummaryProps> = ({ subtotal, onC
     : "/products";
 
   return (
-    <div className="border-t border-stone-100 bg-white px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sticky bottom-0 z-10 select-none">
+    <div className="border-t border-stone-100 bg-white px-5 pt-4.5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shrink-0 z-10 select-none shadow-[0_-4px_16px_rgba(0,0,0,0.03)]">
       {/* Subtotal */}
       <div className="flex justify-between items-center text-xs text-stone-500 font-normal">
         <span>Subtotal</span>
