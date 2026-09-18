@@ -1,7 +1,10 @@
 import { v } from "convex/values";
-import { action, internalQuery, query } from "./_generated/server";
+import { ConvexError } from "convex/values";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireRole } from "./lib/auth";
+import { writeAuditLog } from "./lib/audit";
+import { refundCancelledOrder } from "./lib/refunds";
 import { resolveManualPayoutPaise } from "./adminFinance";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -60,6 +63,11 @@ function attentionReasons(
     !boutique?.razorpayAccountId
   ) {
     reasons.push("Seller has no Razorpay account — cannot be paid by Route");
+  }
+  if (!isFinished && boutique?.payoutsFrozen) {
+    reasons.push(
+      `Seller payouts frozen${boutique.payoutsFrozenReason ? `: ${boutique.payoutsFrozenReason}` : ""}`
+    );
   }
   return reasons;
 }
@@ -201,6 +209,8 @@ export const getPayoutMonitorAdmin = query({
           boutiqueName: boutique?.boutiqueName || (boutique as any)?.name || "Unknown boutique",
           razorpayAccountId: boutique?.razorpayAccountId ?? null,
           kycStatus: boutique?.kycStatus ?? null,
+          sellerPayoutsFrozen: boutique?.payoutsFrozen === true,
+          sellerPayoutsFrozenReason: boutique?.payoutsFrozenReason ?? null,
 
           customerPaidPaise,
           sellerPayoutPaise: payout.sellerPayoutPaise,
@@ -209,6 +219,14 @@ export const getPayoutMonitorAdmin = query({
           gatewayFeePaise: payment?.gatewayFeePaise ?? null,
           refundAmountPaise: payment?.refundAmount ?? null,
           razorpayPaymentId: payment?.razorpayPaymentId ?? null,
+          paymentRowStatus: payment?.status ?? null,
+          // Money reserved at Razorpay but never taken: the manual capture case.
+          capturable:
+            !!payment?.razorpayPaymentId &&
+            !payment.razorpayPaymentId.startsWith("coupon_") &&
+            payment.status !== "captured" &&
+            payment.status !== "refunded" &&
+            payment.status !== "partially_refunded",
 
           payoutStatus: order.payoutStatus ?? null,
           payoutEligibleAt: order.payoutEligibleAt ?? null,
@@ -235,6 +253,8 @@ export const getPayoutMonitorAdmin = query({
         boutiqueId: id,
         boutiqueName: b!.boutiqueName || (b as any).name || "Unknown boutique",
         razorpayAccountId: b!.razorpayAccountId ?? null,
+        payoutsFrozen: b!.payoutsFrozen === true,
+        payoutsFrozenReason: b!.payoutsFrozenReason ?? null,
       }))
       .sort((a, b) => a.boutiqueName.localeCompare(b.boutiqueName));
 
@@ -278,5 +298,240 @@ export const inspectOrderMoneyAdmin = action({
     return await ctx.runAction(internal.razorpayRoute.inspectOrderMoneyAtRazorpay, {
       orderId: args.orderId,
     });
+  },
+});
+
+// ─── Manual controls ─────────────────────────────────────────────────────────
+//
+// Every control below moves real money or changes when money moves, so each one
+// is admin-gated, written to the audit log, and reuses the same guarded path the
+// automatic pipeline uses. None of them bypasses an idempotency check.
+
+/**
+ * Audit + permission gate shared by the control actions. Returns the order so
+ * the action does not need a second round trip.
+ */
+export const startPayoutControlInternal = internalMutation({
+  args: {
+    orderId: v.id("orders"),
+    action: v.string(),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireRole(ctx, "admin");
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new ConvexError("Order not found");
+
+    await writeAuditLog({
+      ctx,
+      actorId: admin._id,
+      actorRole: "admin",
+      action: args.action,
+      entityType: "orders",
+      entityId: args.orderId,
+      before: {
+        payoutStatus: order.payoutStatus,
+        payoutHoldUntil: order.payoutHoldUntil,
+        razorpayTransferId: order.razorpayTransferId,
+      },
+      metadata: args.metadata,
+    });
+
+    return { orderNumber: order.orderNumber, boutiqueId: order.boutiqueId };
+  },
+});
+
+/**
+ * Control 1 — pay the seller out of Hive's Razorpay balance.
+ *
+ * For orders where splitting the customer's payment cannot work: store-credit
+ * orders (the customer paid nothing), or any order whose payment can no longer
+ * carry the transfer. The money leaves Hive's Razorpay balance, so the balance
+ * has to cover it.
+ */
+export const payFromHiveBalanceAdmin = action({
+  args: {
+    orderId: v.id("orders"),
+    hold: v.optional(v.boolean()),
+    reason: v.string(),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    await ctx.runMutation(internal.adminPayoutMonitor.startPayoutControlInternal, {
+      orderId: args.orderId,
+      action: "payout.pay_from_balance",
+      metadata: { reason: args.reason, hold: args.hold === true },
+    });
+    return await ctx.runAction(internal.razorpayRoute.payFromHiveBalance, {
+      orderId: args.orderId,
+      hold: args.hold,
+      reason: args.reason,
+    });
+  },
+});
+
+/**
+ * Control 4 — set, move or lift the hold on a seller's transfer by hand.
+ *
+ * "release" pays the seller now (Razorpay settles on their usual cycle).
+ * "hold_until" keeps the money frozen until a chosen moment, after which
+ * Razorpay releases it automatically. "hold_indefinite" freezes it with no end
+ * date, which is what a return or an open investigation needs.
+ */
+export const setPayoutHoldAdmin = action({
+  args: {
+    orderId: v.id("orders"),
+    mode: v.union(v.literal("release"), v.literal("hold_until"), v.literal("hold_indefinite")),
+    untilMs: v.optional(v.number()),
+    reason: v.string(),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    if (args.mode === "hold_until") {
+      if (!args.untilMs) throw new ConvexError("A hold-until date is required.");
+      if (args.untilMs <= Date.now() + 60_000) {
+        throw new ConvexError("Razorpay only accepts a hold date in the future.");
+      }
+    }
+
+    await ctx.runMutation(internal.adminPayoutMonitor.startPayoutControlInternal, {
+      orderId: args.orderId,
+      action: "payout.hold_changed",
+      metadata: { mode: args.mode, untilMs: args.untilMs, reason: args.reason },
+    });
+
+    return await ctx.runAction(internal.razorpayRoute.updateTransferHold, {
+      orderId: args.orderId,
+      onHold: args.mode !== "release",
+      onHoldUntil: args.mode === "hold_until" ? args.untilMs : undefined,
+      reason: args.reason,
+    });
+  },
+});
+
+/**
+ * Control 5 — capture a payment that Razorpay only authorised.
+ *
+ * The money is reserved on the customer's card but not taken. Capturing it lets
+ * the normal webhook flow place the order and create the seller's transfer.
+ */
+export const capturePaymentAdmin = action({
+  args: { orderId: v.id("orders") },
+  handler: async (ctx, args): Promise<any> => {
+    await ctx.runMutation(internal.adminPayoutMonitor.startPayoutControlInternal, {
+      orderId: args.orderId,
+      action: "payment.manual_capture",
+    });
+    return await ctx.runAction(internal.razorpayRoute.captureAuthorizedPayment, {
+      orderId: args.orderId,
+    });
+  },
+});
+
+/**
+ * Control 2 — cancel an order and refund the customer.
+ *
+ * Queues the refund through the same path an admin cancellation uses, so the
+ * refund is deduplicated, the seller's transfer is reversed with the refund
+ * (reverse_all), and the payout is marked not eligible. The refund is sent by
+ * the queue cron within a few minutes; the bank takes 5-7 working days to show
+ * it to the customer.
+ */
+export const cancelAndRefundOrderAdmin = mutation({
+  args: { orderId: v.id("orders"), reason: v.string() },
+  handler: async (ctx, args) => {
+    const admin = await requireRole(ctx, "admin");
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new ConvexError("Order not found");
+
+    if (order.status === "cancelled") {
+      throw new ConvexError("Order is already cancelled.");
+    }
+    if (order.status === "delivered") {
+      throw new ConvexError(
+        "This order was delivered. Use Returns & Exchanges so the goods come back before the money does."
+      );
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.orderId, {
+      status: "cancelled",
+      cancelledAt: now,
+      cancelReason: args.reason,
+      cancelledBy: admin._id,
+      updatedAt: now,
+    });
+
+    const refund = await refundCancelledOrder(ctx, {
+      orderId: args.orderId,
+      reason: `Order ${order.orderNumber} cancelled from Payout Monitor: ${args.reason}`,
+      idempotencySuffix: "payout_monitor_cancel",
+    });
+
+    await writeAuditLog({
+      ctx,
+      actorId: admin._id,
+      actorRole: "admin",
+      action: "order.cancelled_with_refund",
+      entityType: "orders",
+      entityId: args.orderId,
+      before: { status: order.status, paymentStatus: order.paymentStatus },
+      after: { status: "cancelled" },
+      metadata: { reason: args.reason, refund },
+    });
+
+    return {
+      cancelled: true,
+      refundQueued: refund.enqueued,
+      refundReason: refund.enqueued ? undefined : (refund as any).reason,
+      amountPaise: (refund as any).amountPaise ?? null,
+    };
+  },
+});
+
+/**
+ * Control 3 — freeze or unfreeze every payout for one seller.
+ *
+ * A freeze does not touch money that has already settled. New orders still
+ * create their held transfer, so the customer's payment is still split and the
+ * seller's share is reserved — it simply never gets released while the freeze
+ * is on, including by the automatic release at delivery. Lifting the freeze
+ * lets the normal flow resume; orders that came due in the meantime show up in
+ * Needs attention.
+ */
+export const setSellerPayoutFreezeAdmin = mutation({
+  args: {
+    boutiqueId: v.id("boutiques"),
+    frozen: v.boolean(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireRole(ctx, "admin");
+    const boutique = await ctx.db.get(args.boutiqueId);
+    if (!boutique) throw new ConvexError("Boutique not found");
+
+    if (args.frozen && !args.reason?.trim()) {
+      throw new ConvexError("A reason is required to freeze a seller's payouts.");
+    }
+
+    await ctx.db.patch(args.boutiqueId, {
+      payoutsFrozen: args.frozen,
+      payoutsFrozenReason: args.frozen ? args.reason!.trim() : undefined,
+      payoutsFrozenAt: args.frozen ? Date.now() : undefined,
+      payoutsFrozenBy: args.frozen ? admin._id : undefined,
+      updatedAt: Date.now(),
+    });
+
+    await writeAuditLog({
+      ctx,
+      actorId: admin._id,
+      actorRole: "admin",
+      action: args.frozen ? "seller.payouts_frozen" : "seller.payouts_unfrozen",
+      entityType: "boutiques",
+      entityId: args.boutiqueId,
+      before: { payoutsFrozen: boutique.payoutsFrozen === true },
+      after: { payoutsFrozen: args.frozen },
+      metadata: { reason: args.reason },
+    });
+
+    return { frozen: args.frozen };
   },
 });

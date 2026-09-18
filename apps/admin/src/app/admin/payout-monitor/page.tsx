@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useQuery, useAction } from "convex/react";
+import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import { Card } from "@hive/ui";
 import {
@@ -12,6 +12,13 @@ import {
   ExternalLink,
   ShieldAlert,
   X,
+  Banknote,
+  Clock,
+  Lock,
+  Unlock,
+  Download,
+  Ban,
+  HandCoins,
 } from "lucide-react";
 
 const STATE_TABS: Array<{ key: string; label: string }> = [
@@ -75,8 +82,17 @@ export default function PayoutMonitorPage() {
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [inspection, setInspection] = useState<any | null>(null);
 
+  const [controlNote, setControlNote] = useState("");
+  const [holdUntil, setHoldUntil] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+
   const retryTransfer = useAction(api.razorpayRoute.retrySellerTransfer);
   const inspectAtRazorpay = useAction(api.adminPayoutMonitor.inspectOrderMoneyAdmin);
+  const payFromBalance = useAction(api.adminPayoutMonitor.payFromHiveBalanceAdmin);
+  const setPayoutHold = useAction(api.adminPayoutMonitor.setPayoutHoldAdmin);
+  const capturePayment = useAction(api.adminPayoutMonitor.capturePaymentAdmin);
+  const cancelAndRefund = useMutation(api.adminPayoutMonitor.cancelAndRefundOrderAdmin);
+  const setSellerFreeze = useMutation(api.adminPayoutMonitor.setSellerPayoutFreezeAdmin);
 
   const data = useQuery(api.adminPayoutMonitor.getPayoutMonitorAdmin, {
     payoutStatus: tab || undefined,
@@ -97,6 +113,11 @@ export default function PayoutMonitorPage() {
     return counts;
   }, [data]);
 
+  const selectedSeller = useMemo(
+    () => (data && boutiqueId ? data.sellers.find((s: any) => s.boutiqueId === boutiqueId) : null),
+    [data, boutiqueId]
+  );
+
   const runRetry = async (orderId: string) => {
     setBusyOrderId(orderId);
     try {
@@ -107,6 +128,52 @@ export default function PayoutMonitorPage() {
     } finally {
       setBusyOrderId(null);
     }
+  };
+
+  /** Every control runs through here: confirm, call, show the outcome. */
+  const runControl = async (
+    orderId: string,
+    confirmText: string,
+    call: () => Promise<any>
+  ) => {
+    if (!window.confirm(confirmText)) return;
+    setBusyOrderId(orderId);
+    setResult(null);
+    try {
+      const outcome = await call();
+      setResult(JSON.stringify(outcome, null, 2));
+    } catch (err: any) {
+      setResult(`Failed: ${err?.data?.message || err?.data || err.message}`);
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const exportCsv = () => {
+    const columns = [
+      "orderNumber", "createdAt", "deliveredAt", "orderStatus", "boutiqueName",
+      "razorpayAccountId", "customerPaidPaise", "sellerPayoutPaise", "hiveKeepsPaise",
+      "gatewayFeePaise", "refundAmountPaise", "payoutStatus", "transferStatus",
+      "razorpayTransferId", "razorpayPaymentId", "payoutHoldUntil", "payoutFailureReason",
+      "disputeStatus", "settledUtr", "isTestData",
+    ];
+    const cell = (row: any, key: string) => {
+      const value = row[key];
+      if (value === null || value === undefined) return "";
+      if (key.endsWith("Paise")) return (value / 100).toFixed(2);
+      if (key.endsWith("At") || key === "payoutHoldUntil") return new Date(value).toISOString();
+      return String(value).replace(/"/g, '""');
+    };
+    const csv = [
+      columns.join(","),
+      ...data!.rows.map((row: any) => columns.map((c) => `"${cell(row, c)}"`).join(",")),
+    ].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `hive-payouts-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const runInspect = async (orderId: string) => {
@@ -252,6 +319,14 @@ export default function PayoutMonitorPage() {
           </label>
 
           <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-widest hover:bg-slate-50"
+            title="Downloads exactly the rows shown below, amounts in rupees"
+          >
+            <Download className="w-3.5 h-3.5" /> CSV
+          </button>
+
+          <button
             onClick={() => {
               setTab("attention");
               setIncludeTestData(false);
@@ -267,6 +342,55 @@ export default function PayoutMonitorPage() {
           </button>
         </div>
       </Card>
+
+      {/* Seller-wide freeze, only meaningful with one seller selected */}
+      {selectedSeller && (
+        <Card
+          className={`border shadow-sm rounded-3xl p-5 flex flex-wrap items-center gap-4 ${
+            selectedSeller.payoutsFrozen ? "border-red-200 bg-red-50" : "border-hive-border bg-white"
+          }`}
+        >
+          <div className="flex-1 min-w-[280px]">
+            <div className="font-bold text-hive-dark flex items-center gap-2">
+              {selectedSeller.payoutsFrozen ? <Lock className="w-4 h-4 text-red-600" /> : <Unlock className="w-4 h-4 text-slate-400" />}
+              {selectedSeller.boutiqueName} — payouts {selectedSeller.payoutsFrozen ? "frozen" : "normal"}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Freezing stops every release to this seller, including the automatic one at delivery.
+              Their share is still reserved out of each payment, so nothing is lost — it simply stays
+              frozen until you lift this. Money already settled is not affected.
+            </p>
+            {selectedSeller.payoutsFrozenReason && (
+              <p className="text-xs font-semibold text-red-700 mt-1">Reason: {selectedSeller.payoutsFrozenReason}</p>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              const frozen = !selectedSeller.payoutsFrozen;
+              const reason = frozen
+                ? window.prompt(`Why are you freezing payouts for ${selectedSeller.boutiqueName}?`)
+                : undefined;
+              if (frozen && !reason) return;
+              if (!window.confirm(
+                frozen
+                  ? `Freeze all payouts for ${selectedSeller.boutiqueName}? Nothing will be released to them until you unfreeze.`
+                  : `Unfreeze payouts for ${selectedSeller.boutiqueName}? Normal releases resume.`
+              )) return;
+              try {
+                await setSellerFreeze({ boutiqueId: selectedSeller.boutiqueId as any, frozen, reason: reason ?? undefined });
+              } catch (err: any) {
+                alert(err?.data?.message || err.message);
+              }
+            }}
+            className={`inline-flex items-center gap-2 font-extrabold text-[10px] uppercase tracking-widest px-4 py-3 rounded-lg text-white ${
+              selectedSeller.payoutsFrozen ? "bg-emerald-700 hover:bg-emerald-800" : "bg-red-700 hover:bg-red-800"
+            }`}
+          >
+            {selectedSeller.payoutsFrozen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+            {selectedSeller.payoutsFrozen ? "Unfreeze payouts" : "Freeze payouts"}
+          </button>
+        </Card>
+      )}
 
       {/* Table */}
       <Card className="border border-hive-border bg-white shadow-sm overflow-hidden rounded-3xl">
@@ -337,6 +461,9 @@ export default function PayoutMonitorPage() {
                         onClick={() => {
                           setDetail(row);
                           setInspection(null);
+                          setResult(null);
+                          setControlNote("");
+                          setHoldUntil("");
                         }}
                         className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-hive-dark"
                       >
@@ -423,6 +550,252 @@ export default function PayoutMonitorPage() {
                 <Line label="KYC" value={detail.kycStatus ?? "—"} />
               </section>
 
+              <section className="flex flex-col gap-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                  Controls
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Each control below moves real money or changes when it moves. Every use is written to
+                  the audit log with your name.
+                </p>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Note / reason (saved with the action)
+                  </span>
+                  <input
+                    value={controlNote}
+                    onChange={(e) => setControlNote(e.target.value)}
+                    placeholder="e.g. store credit order, paying seller manually"
+                    className="border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                  />
+                </label>
+
+                <ControlCard
+                  icon={<HandCoins className="w-4 h-4" />}
+                  title="Pay seller from Hive balance"
+                  what="Sends the seller their payout straight out of Hive's Razorpay balance instead of splitting the customer's payment."
+                  when="Use when the customer paid with store credit (₹0 captured) or the payment can no longer carry a transfer. Hive's balance must cover it."
+                  disabledReason={
+                    detail.razorpayTransferId
+                      ? "A transfer already exists for this order."
+                      : detail.payoutStatus === "paid" || detail.payoutStatus === "settled"
+                        ? "This payout is already done."
+                        : !detail.razorpayAccountId
+                          ? "This seller has no Razorpay account yet."
+                          : detail.sellerPayoutsFrozen
+                            ? "This seller's payouts are frozen."
+                            : null
+                  }
+                  busy={busyOrderId === detail.orderId}
+                  buttons={[
+                    {
+                      label: `Pay ${formatCurrency(detail.sellerPayoutPaise)} now`,
+                      tone: "primary",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Send ${formatCurrency(detail.sellerPayoutPaise)} from Hive's Razorpay balance to ${detail.boutiqueName} for ${detail.orderNumber}? This moves real money and cannot be undone from here.`,
+                          () =>
+                            payFromBalance({
+                              orderId: detail.orderId as any,
+                              reason: controlNote || "Manual payout from Hive balance",
+                            })
+                        ),
+                    },
+                    {
+                      label: "Send but keep frozen",
+                      tone: "ghost",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Send ${formatCurrency(detail.sellerPayoutPaise)} to ${detail.boutiqueName} but keep it frozen in their Razorpay account? You release it later from this same drawer.`,
+                          () =>
+                            payFromBalance({
+                              orderId: detail.orderId as any,
+                              hold: true,
+                              reason: controlNote || "Manual payout from Hive balance, held",
+                            })
+                        ),
+                    },
+                  ]}
+                />
+
+                <ControlCard
+                  icon={<Clock className="w-4 h-4" />}
+                  title="Change the hold on this payout"
+                  what="Release the seller's frozen money now, park it until a date you pick, or freeze it with no end date."
+                  when="Release once you are sure the order is settled. Hold until a date to extend the return window. Freeze indefinitely while a return or investigation is open."
+                  disabledReason={
+                    !detail.razorpayTransferId
+                      ? "No transfer exists yet, so there is nothing to hold or release."
+                      : detail.payoutStatus === "paid" || detail.payoutStatus === "settled"
+                        ? "This payout was already released."
+                        : null
+                  }
+                  busy={busyOrderId === detail.orderId}
+                  extra={
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Hold until (for the middle button)
+                      </span>
+                      <input
+                        type="datetime-local"
+                        value={holdUntil}
+                        onChange={(e) => setHoldUntil(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-3 py-2 text-xs"
+                      />
+                    </label>
+                  }
+                  buttons={[
+                    {
+                      label: "Release now",
+                      tone: "primary",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Release ${formatCurrency(detail.sellerPayoutPaise)} to ${detail.boutiqueName}? Razorpay settles it to their bank on their normal cycle and it can no longer be reversed automatically.`,
+                          () =>
+                            setPayoutHold({
+                              orderId: detail.orderId as any,
+                              mode: "release",
+                              reason: controlNote || "Released by admin",
+                            })
+                        ),
+                    },
+                    {
+                      label: "Hold until date",
+                      tone: "ghost",
+                      onClick: () => {
+                        if (!holdUntil) {
+                          alert("Pick a date and time first.");
+                          return;
+                        }
+                        const untilMs = new Date(holdUntil).getTime();
+                        runControl(
+                          detail.orderId,
+                          `Keep ${formatCurrency(detail.sellerPayoutPaise)} frozen until ${new Date(untilMs).toLocaleString("en-IN")}? Razorpay releases it automatically after that.`,
+                          () =>
+                            setPayoutHold({
+                              orderId: detail.orderId as any,
+                              mode: "hold_until",
+                              untilMs,
+                              reason: controlNote || "Hold date set by admin",
+                            })
+                        );
+                      },
+                    },
+                    {
+                      label: "Freeze with no end date",
+                      tone: "ghost",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Freeze ${formatCurrency(detail.sellerPayoutPaise)} indefinitely? It stays in the seller's account, unusable, until you release it here.`,
+                          () =>
+                            setPayoutHold({
+                              orderId: detail.orderId as any,
+                              mode: "hold_indefinite",
+                              reason: controlNote || "Frozen by admin",
+                            })
+                        ),
+                    },
+                  ]}
+                />
+
+                <ControlCard
+                  icon={<Banknote className="w-4 h-4" />}
+                  title="Capture the payment"
+                  what="Takes money that Razorpay only reserved on the customer's card."
+                  when="Only needed when a payment sits at 'authorised' — auto-capture off, or it failed. After capturing, Razorpay's webhook places the order and creates the seller transfer by itself."
+                  disabledReason={detail.capturable ? null : "This payment is already captured or has no Razorpay payment to capture."}
+                  busy={busyOrderId === detail.orderId}
+                  buttons={[
+                    {
+                      label: "Capture now",
+                      tone: "primary",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Capture the authorised payment for ${detail.orderNumber}? This takes the money from the customer.`,
+                          () => capturePayment({ orderId: detail.orderId as any })
+                        ),
+                    },
+                  ]}
+                />
+
+                <ControlCard
+                  icon={<Ban className="w-4 h-4" />}
+                  title="Cancel order and refund customer"
+                  what="Cancels the order and queues a full refund. The seller's transfer is reversed along with it, so nobody is paid for a cancelled order."
+                  when="Use before delivery. The refund leaves within minutes; the customer's bank shows it in 5-7 working days. Delivered orders must go through Returns & Exchanges instead."
+                  disabledReason={
+                    detail.orderStatus === "cancelled"
+                      ? "This order is already cancelled."
+                      : detail.orderStatus === "delivered"
+                        ? "Delivered — use Returns & Exchanges so the goods come back first."
+                        : null
+                  }
+                  busy={busyOrderId === detail.orderId}
+                  buttons={[
+                    {
+                      label: "Cancel and refund",
+                      tone: "danger",
+                      onClick: () =>
+                        runControl(
+                          detail.orderId,
+                          `Cancel ${detail.orderNumber} and refund ${formatCurrency(detail.customerPaidPaise)} to the customer? The seller's transfer is reversed too.`,
+                          () =>
+                            cancelAndRefund({
+                              orderId: detail.orderId as any,
+                              reason: controlNote || "Cancelled by admin from Payout Monitor",
+                            })
+                        ),
+                    },
+                  ]}
+                />
+
+                <ControlCard
+                  icon={detail.sellerPayoutsFrozen ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  title={detail.sellerPayoutsFrozen ? "Unfreeze this seller" : "Freeze this seller's payouts"}
+                  what="Applies to every order of this seller, not just this one."
+                  when="Freeze during a fraud check or an account problem: their share is still reserved from each payment but never released. Unfreeze to resume normal releases."
+                  disabledReason={null}
+                  busy={busyOrderId === detail.orderId}
+                  buttons={[
+                    {
+                      label: detail.sellerPayoutsFrozen ? "Unfreeze seller" : "Freeze seller",
+                      tone: detail.sellerPayoutsFrozen ? "primary" : "danger",
+                      onClick: async () => {
+                        const frozen = !detail.sellerPayoutsFrozen;
+                        const reason = frozen
+                          ? window.prompt(`Why are you freezing payouts for ${detail.boutiqueName}?`)
+                          : undefined;
+                        if (frozen && !reason) return;
+                        await runControl(
+                          detail.orderId,
+                          frozen
+                            ? `Freeze all payouts for ${detail.boutiqueName}?`
+                            : `Unfreeze payouts for ${detail.boutiqueName}?`,
+                          () =>
+                            setSellerFreeze({
+                              boutiqueId: detail.boutiqueId as any,
+                              frozen,
+                              reason: reason ?? undefined,
+                            })
+                        );
+                      },
+                    },
+                  ]}
+                />
+
+                {result && (
+                  <pre className="bg-slate-900 text-slate-100 rounded-xl p-4 text-[10px] overflow-x-auto whitespace-pre-wrap">
+                    {result}
+                  </pre>
+                )}
+              </section>
+
               <button
                 disabled={busyOrderId === detail.orderId}
                 onClick={() => runInspect(detail.orderId)}
@@ -440,6 +813,69 @@ export default function PayoutMonitorPage() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One control: what it does, when to use it, and its buttons. A disabled control
+ * still explains itself, so it is obvious why it cannot be used right now.
+ */
+function ControlCard({
+  icon,
+  title,
+  what,
+  when,
+  disabledReason,
+  busy,
+  buttons,
+  extra,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  what: string;
+  when: string;
+  disabledReason: string | null;
+  busy: boolean;
+  buttons: Array<{ label: string; tone: "primary" | "danger" | "ghost"; onClick: () => void }>;
+  extra?: React.ReactNode;
+}) {
+  const disabled = !!disabledReason || busy;
+  const toneClass = (tone: string) =>
+    tone === "primary"
+      ? "bg-hive-dark text-white hover:bg-black"
+      : tone === "danger"
+        ? "bg-red-700 text-white hover:bg-red-800"
+        : "border border-slate-200 text-slate-700 hover:bg-slate-50";
+
+  return (
+    <div className={`rounded-2xl border p-4 flex flex-col gap-2 ${disabledReason ? "border-slate-100 bg-slate-50/60" : "border-slate-200 bg-white"}`}>
+      <div className="flex items-center gap-2 font-bold text-hive-dark text-xs">
+        {icon}
+        {title}
+      </div>
+      <p className="text-[11px] text-slate-600">{what}</p>
+      <p className="text-[11px] text-slate-500">{when}</p>
+      {disabledReason ? (
+        <p className="text-[11px] font-semibold text-slate-400">Not available: {disabledReason}</p>
+      ) : (
+        <>
+          {extra}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {buttons.map((b) => (
+              <button
+                key={b.label}
+                disabled={disabled}
+                onClick={b.onClick}
+                className={`inline-flex items-center gap-1.5 font-extrabold text-[10px] uppercase tracking-widest px-3 py-2.5 rounded-lg disabled:opacity-50 ${toneClass(b.tone)}`}
+              >
+                {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+                {b.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

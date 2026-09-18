@@ -574,6 +574,21 @@ export const updateTransferHold = internalAction({
       return { success: true, reason: "already_released" };
     }
 
+    if (!args.onHold) {
+      const boutique = await ctx.runQuery((internal.boutiques as any).getById, {
+        id: order.boutiqueId,
+      });
+      if (boutique?.payoutsFrozen) {
+        log("seller_payouts_frozen", { boutiqueId: order.boutiqueId });
+        await ctx.runMutation((internal.orders as any).patchOrderPayoutStatus, {
+          orderId: args.orderId,
+          payoutStatus: "withheld",
+          payoutHoldReason: "seller_payouts_frozen",
+        });
+        return { success: false, reason: "seller_payouts_frozen" };
+      }
+    }
+
     const body: Record<string, unknown> = { on_hold: args.onHold };
     if (args.onHold && args.onHoldUntil !== undefined) {
       // Razorpay expects seconds, and only accepts a future timestamp.
@@ -895,6 +910,17 @@ export const createSellerTransfer = internalAction({
         payoutFailureReason: "Boutique has no Razorpay Route linked account",
       });
       return { success: false, reason: "no_razorpay_account" };
+    }
+
+    // ── Admin freeze on this seller ─────────────────────────────────────────
+    if (boutique.payoutsFrozen) {
+      log("seller_payouts_frozen", { boutiqueId: order.boutiqueId });
+      await ctx.runMutation((internal.orders as any).patchOrderPayoutStatus, {
+        orderId: args.orderId,
+        payoutStatus: "withheld",
+        payoutHoldReason: "seller_payouts_frozen",
+      });
+      return { success: false, reason: "seller_payouts_frozen" };
     }
 
     // ── Payment must be captured ─────────────────────────────────────────────
@@ -1222,5 +1248,170 @@ export const reconcilePaidTransfersWithRazorpay = internalAction({
 
     console.log(`[reconcilePaidTransfersWithRazorpay] ${JSON.stringify(report)}`);
     return report;
+  },
+});
+
+// ─── Admin manual controls ───────────────────────────────────────────────────
+
+/**
+ * Pay a seller straight out of Hive's Razorpay balance, bypassing the payment split.
+ *
+ * The normal path hangs the seller's transfer on the customer's payment, which
+ * Razorpay caps at the captured amount. That is impossible for an order the
+ * customer paid for with store credit (captured ₹0) and awkward for any order
+ * whose payment is gone. This sources the money from Hive's own balance instead.
+ *
+ * Guarded the same way as every other transfer path: never when a transfer
+ * already exists, never for test-mode orders, never for an already-paid payout,
+ * and never past the order's own payout figure.
+ */
+export const payFromHiveBalance = internalAction({
+  args: {
+    orderId: v.id("orders"),
+    /** Hold the money in the seller's account instead of settling it. */
+    hold: v.optional(v.boolean()),
+    reason: v.string(),
+  },
+  handler: async (ctx, args): Promise<any> => {
+    const log = (reason: string, detail?: Record<string, unknown>) =>
+      console.log(
+        `[payFromHiveBalance] order=${args.orderId} reason=${reason}` +
+          (detail ? ` detail=${JSON.stringify(detail)}` : "")
+      );
+
+    const authHeader = resolveRazorpayAuthHeader();
+    if (!authHeader) return { success: false, reason: "razorpay_not_configured" };
+
+    const order = await ctx.runQuery((internal.orders as any).getById, { id: args.orderId });
+    if (!order) return { success: false, reason: "order_not_found" };
+    if (order.isTestData) return { success: false, reason: "test_data_skipped" };
+    if (order.razorpayTransferId) {
+      return { success: false, reason: "already_transferred", transferId: order.razorpayTransferId };
+    }
+    if (order.payoutStatus === "paid" || order.payoutStatus === "settled") {
+      return { success: false, reason: `already_${order.payoutStatus}` };
+    }
+    if (order.disputeStatus === "open" || order.disputeStatus === "lost") {
+      return { success: false, reason: `chargeback_${order.disputeStatus}` };
+    }
+
+    const boutique = await ctx.runQuery((internal.boutiques as any).getById, {
+      id: order.boutiqueId,
+    });
+    if (!boutique?.razorpayAccountId) return { success: false, reason: "no_razorpay_account" };
+    if (boutique.payoutsFrozen) return { success: false, reason: "seller_payouts_frozen" };
+
+    const { payoutPaise, source } = resolveSellerPayoutPaise(order);
+    if (payoutPaise <= 0) return { success: false, reason: "zero_payout" };
+
+    const hold = args.hold === true;
+
+    try {
+      const res = await fetch(`${RAZORPAY_API}/transfers`, {
+        method: "POST",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account: boutique.razorpayAccountId,
+          amount: payoutPaise,
+          currency: "INR",
+          on_hold: hold,
+          notes: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            boutiqueId: order.boutiqueId,
+            payoutSource: source,
+            fundedBy: "hive_balance",
+            adminReason: args.reason,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        log("razorpay_error", { status: res.status, error: errText.substring(0, 300) });
+        await ctx.runMutation((internal.orders as any).patchOrderPayoutStatus, {
+          orderId: args.orderId,
+          payoutStatus: "failed",
+          payoutFailureReason: `Direct transfer failed: ${errText.substring(0, 200)}`,
+        });
+        return { success: false, reason: "razorpay_error", error: errText };
+      }
+
+      const data = await res.json();
+      if (!data.id) return { success: false, reason: "missing_transfer_id" };
+
+      await ctx.runMutation((internal.orders as any).patchOrderPayoutStatus, {
+        orderId: args.orderId,
+        payoutStatus: hold ? "withheld" : "paid",
+        razorpayTransferId: data.id,
+        payoutProcessedAt: hold ? undefined : Date.now(),
+        payoutHoldUntil: null,
+        payoutHoldReason: hold ? args.reason : null,
+        payoutFailureReason: undefined,
+      });
+
+      log("transferred", { transferId: data.id, payoutPaise, hold });
+      return { success: true, transferId: data.id, amountPaise: payoutPaise, onHold: hold };
+    } catch (err: any) {
+      log("exception", { error: err?.message || String(err) });
+      return { success: false, reason: "exception", error: err?.message };
+    }
+  },
+});
+
+/**
+ * Capture a payment Razorpay only authorised.
+ *
+ * With auto-capture on this never happens; it is the recovery path for a
+ * payment that was authorised while auto-capture was off or failing, where the
+ * money is reserved on the customer's card but never taken. Capturing makes the
+ * rest of the pipeline (order placement, seller transfer) run from the webhook
+ * as usual. Only the exact authorised amount is captured.
+ */
+export const captureAuthorizedPayment = internalAction({
+  args: { orderId: v.id("orders") },
+  handler: async (ctx, args): Promise<any> => {
+    const authHeader = resolveRazorpayAuthHeader();
+    if (!authHeader) return { success: false, reason: "razorpay_not_configured" };
+
+    const order = await ctx.runQuery((internal.orders as any).getById, { id: args.orderId });
+    if (!order) return { success: false, reason: "order_not_found" };
+    if (order.isTestData) return { success: false, reason: "test_data_skipped" };
+
+    const payment = order.paymentId
+      ? await ctx.runQuery((internal.payments as any).getPaymentById, { paymentId: order.paymentId })
+      : null;
+    if (!payment?.razorpayPaymentId || payment.razorpayPaymentId.startsWith("coupon_")) {
+      return { success: false, reason: "no_razorpay_payment" };
+    }
+
+    const lookup = await fetch(`${RAZORPAY_API}/payments/${payment.razorpayPaymentId}`, {
+      headers: { Authorization: authHeader },
+    });
+    if (!lookup.ok) {
+      return { success: false, reason: "lookup_failed", error: (await lookup.text()).substring(0, 300) };
+    }
+    const live = await lookup.json();
+    if (live.status === "captured") return { success: true, reason: "already_captured" };
+    if (live.status !== "authorized") {
+      return { success: false, reason: `payment_status_${live.status}` };
+    }
+
+    const res = await fetch(`${RAZORPAY_API}/payments/${payment.razorpayPaymentId}/capture`, {
+      method: "POST",
+      headers: { Authorization: authHeader, "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: live.amount, currency: live.currency ?? "INR" }),
+    });
+    if (!res.ok) {
+      return { success: false, reason: "capture_failed", error: (await res.text()).substring(0, 300) };
+    }
+
+    const captured = await res.json();
+    return {
+      success: true,
+      reason: "captured",
+      amountPaise: captured.amount,
+      note: "Razorpay will send payment.captured; the order and seller transfer follow from there.",
+    };
   },
 });

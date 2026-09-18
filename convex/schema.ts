@@ -452,6 +452,14 @@ export default defineSchema({
     maxActiveOrders:            v.optional(v.number()),
     minimumOrderValue:          v.optional(v.number()),
 
+    // Admin freeze on this seller's payouts (fraud check, dispute, account
+    // problem). Held transfers are still created so the money is reserved, but
+    // nothing is released to them while this is true.
+    payoutsFrozen:       v.optional(v.boolean()),
+    payoutsFrozenReason: v.optional(v.string()),
+    payoutsFrozenAt:     v.optional(v.number()),
+    payoutsFrozenBy:     v.optional(v.id("users")),
+
     // Razorpay Route integration
     razorpayAccountId: v.optional(v.string()),
     kycStatus: v.optional(
