@@ -97,7 +97,7 @@ export default async function LocationPage({ params }: Props) {
   const serviceSchema = {
     "@context": "https://schema.org",
     "@type": "Service",
-    "serviceType": "Hyperlocal Boutique Fashion Delivery",
+    "serviceType": "Hyperlocal Fashion Delivery",
     "provider": {
       "@type": "LocalBusiness",
       "name": "Hive",
@@ -107,7 +107,7 @@ export default async function LocationPage({ params }: Props) {
       "@type": "AdministrativeArea",
       "name": location.name
     },
-    "description": `Fast same-day delivery of premium fashion from local boutiques directly to your doorstep in ${location.name}.`
+    "description": `Fast same-day delivery of premium fashion from local brands and stores directly to your doorstep in ${location.name}.`
   };
 
   return (
@@ -183,7 +183,7 @@ export default async function LocationPage({ params }: Props) {
                 </div>
                 <div>
                   <h3 className="text-sm font-serif font-bold text-white">Hyperlocal Speed</h3>
-                  <p className="text-[10px] text-hive-cream/60 max-w-[150px] mt-1">Direct deliveries from local fashion boutiques to your door.</p>
+                  <p className="text-[10px] text-hive-cream/60 max-w-[150px] mt-1">Direct deliveries from local fashion brands and stores to your door.</p>
                 </div>
               </div>
             </div>
@@ -224,15 +224,15 @@ export default async function LocationPage({ params }: Props) {
               <li className="flex items-start gap-2.5">
                 <Store className="w-4 h-4 text-hive-gold flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-xs font-bold text-hive-dark dark:text-white">Premium Local Boutiques</h4>
-                  <p className="text-[10px] text-hive-text-muted dark:text-neutral-400 mt-0.5 leading-relaxed">Shop verified, authenticated designer pieces from top-rated boutiques.</p>
+                  <h4 className="text-xs font-bold text-hive-dark dark:text-white">Local Brands & Stores</h4>
+                  <p className="text-[10px] text-hive-text-muted dark:text-neutral-400 mt-0.5 leading-relaxed">Shop authentic pieces from top-rated local brands and stores.</p>
                 </div>
               </li>
               <li className="flex items-start gap-2.5">
                 <Truck className="w-4 h-4 text-hive-gold flex-shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-xs font-bold text-hive-dark dark:text-white">Instant Fulfillment</h4>
-                  <p className="text-[10px] text-hive-text-muted dark:text-neutral-400 mt-0.5 leading-relaxed">Orders are dispatched directly from the boutique with zero transit delays.</p>
+                  <p className="text-[10px] text-hive-text-muted dark:text-neutral-400 mt-0.5 leading-relaxed">Orders are dispatched directly from the store with zero transit delays.</p>
                 </div>
               </li>
             </ul>

@@ -11,7 +11,7 @@ export function OrganizationSchema() {
     url: SITE_URL,
     logo: `${SITE_URL}/logo.png`,
     foundingDate: "2024",
-    description: "Hive is a hyperlocal fashion marketplace in Kochi, Kerala. It connects customers with local fashion boutiques and brands across Kochi and Ernakulam for 90-minute delivery.",
+    description: "Hive is a hyperlocal fashion marketplace in Kochi, Kerala. It connects customers with local fashion brands and stores across Kochi and Ernakulam for 90-minute delivery.",
     sameAs: [
       "https://www.instagram.com/hivenow.in",
       "https://www.hivenow.in",

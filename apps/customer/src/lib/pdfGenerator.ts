@@ -94,7 +94,7 @@ export async function generateInvoicePdf(invoice: InvoiceData, logoUrl?: string)
     color: colorDark,
   });
 
-  page.drawText("Hyperlocal Fashion & Boutique Aggregator", {
+  page.drawText("Hyperlocal Fashion Marketplace", {
     x: 50,
     y: pageHeight - 60,
     size: 8,

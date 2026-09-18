@@ -45,13 +45,13 @@ export const BoutiqueSpotlight: React.FC<BoutiqueSpotlightProps> = ({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 border-b border-hive-border/40 pb-5">
         <div className="flex flex-col text-left items-start gap-1">
           <span className="text-[10px] font-bold text-hive-amber tracking-widest uppercase">
-            DESIGNER SPOTLIGHT
+            BRAND &amp; STORE SPOTLIGHT
           </span>
           <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold font-serif text-hive-dark">
-            Featured Boutiques
+            Featured Brands &amp; Stores
           </h2>
           <p className="text-sm text-hive-text-muted mt-0.5 max-w-xl hidden sm:block">
-            Discover independent designers and boutique fashion houses near you.
+            Discover independent designers and fashion stores near you.
           </p>
         </div>
 

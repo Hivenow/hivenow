@@ -34,7 +34,7 @@ export default function WaitlistPage() {
           </h1>
           
           <p className="text-lg md:text-xl text-hive-text-muted max-w-2xl mt-4 leading-relaxed">
-            Get the perfect fit without leaving your home. We connect you with top-tier local boutiques for premium tailoring, transparent pricing, and fast logistics.
+            Get the perfect fit without leaving your home. We connect you with top-tier local brands and stores for premium clothing, transparent pricing, and fast logistics.
           </p>
           
           {/* Email Input & CTA */}
@@ -79,7 +79,7 @@ export default function WaitlistPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <CardDescription className="text-base leading-relaxed text-hive-text-muted">
-                Expert craftsmanship from vetted local boutiques. We ensure every stitch meets our rigorous quality standards for the perfect fit.
+                Expert craftsmanship from vetted local brands and stores. We ensure every stitch meets our rigorous quality standards for the perfect fit.
               </CardDescription>
             </CardContent>
           </Card>

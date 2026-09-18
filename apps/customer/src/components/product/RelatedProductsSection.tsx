@@ -138,7 +138,7 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({ 
   const recommendations = React.useMemo(() => {
     const btqName = (product as any).boutiqueName || product.boutique?.name;
     return products
-      .filter((p) => p.boutiqueName === btqName && p.slug !== product.slug)
+      .filter((p: any) => p.boutiqueName === btqName && p.slug !== product.slug)
       .slice(0, 4);
   }, [product, products]);
 
@@ -157,10 +157,7 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({ 
       className="w-full border-t border-stone-200/70 pt-12 mt-12 text-left"
     >
       {/* Header */}
-      <div className="flex flex-col gap-1 mb-8">
-        <span className="text-[10px] font-bold text-amber-600 uppercase tracking-[0.2em] select-none">
-          PICKED FOR YOU
-        </span>
+      <div className="flex flex-col gap-1 mb-6">
         <h2 
           id="related-products-title" 
           className="text-xl md:text-2xl font-serif font-bold text-stone-900"
@@ -168,13 +165,13 @@ export const RelatedProductsSection: React.FC<RelatedProductsSectionProps> = ({ 
           Similar Styles
         </h2>
         <p className="text-xs text-stone-500 font-normal">
-          Discover more curated pieces on Hive
+          More options in this category from local brands and stores
         </p>
       </div>
 
       {/* Grid: 4 columns desktop, 2 columns tablet, 1 column mobile */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-        {recommendations.map((item) => (
+        {recommendations.map((item: any) => (
           <div 
             key={item.id} 
             className="relative z-0 group outline-none rounded-2xl"

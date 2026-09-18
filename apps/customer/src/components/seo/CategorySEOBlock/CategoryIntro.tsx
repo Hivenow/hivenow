@@ -3,12 +3,15 @@ import React from "react";
 export function CategoryIntro({ intro, deliveryAreas }: { intro: string; deliveryAreas: string[] }) {
   if (!intro && (!deliveryAreas || deliveryAreas.length === 0)) return null;
 
-  // Ensure "Ernakulam's top boutiques" or cliché "top boutiques" is NEVER displayed in collection intros
+  // Ensure "boutique" is replaced with "brand" or "store" in collection intros
   const sanitizedIntro = intro
     ? intro
-        .replace(/Ernakulam's top boutiques/gi, "curated local boutiques across Kochi")
-        .replace(/top boutiques/gi, "curated local boutiques")
-        .replace(/top local boutiques/gi, "independent local boutiques")
+        .replace(/Ernakulam's top boutiques/gi, "independent brands and stores across Kochi")
+        .replace(/top boutiques/gi, "local brands and stores")
+        .replace(/top local boutiques/gi, "independent local brands and stores")
+        .replace(/curated local boutiques/gi, "local brands and stores")
+        .replace(/boutiques/gi, "brands and stores")
+        .replace(/boutique/gi, "store")
     : "";
 
   return (

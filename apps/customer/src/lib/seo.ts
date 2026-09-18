@@ -97,7 +97,7 @@ export function getCategoryMetadata(category: string): Metadata {
   const title = content ? content.seoTitle : `${displayName} in Ernakulam`;
   const description = content
     ? content.metaDescription
-    : `Shop premium ${displayName.toLowerCase()} from Ernakulam boutiques with same-day delivery on Hive.`;
+    : `Shop premium ${displayName.toLowerCase()} from Ernakulam brands and stores with same-day delivery on Hive.`;
   
   return constructMetadata({
     title,
@@ -108,8 +108,8 @@ export function getCategoryMetadata(category: string): Metadata {
 
 export function getSellerMetadata(): Metadata {
   return constructMetadata({
-    title: "Partner with Hive | List Your Fashion Boutique in Kochi & Ernakulam",
-    description: "Are you a boutique owner in Kochi or Ernakulam? Join Hive to reach thousands of fashion shoppers with 90-minute delivery. Grow your boutique online with Hive.",
+    title: "Partner with Hive | List Your Fashion Brand or Store in Kochi & Ernakulam",
+    description: "Are you a brand or store owner in Kochi or Ernakulam? Join Hive to reach thousands of fashion shoppers with 90-minute delivery. Grow your fashion store online with Hive.",
     path: "/become-seller",
   });
 }
@@ -117,7 +117,7 @@ export function getSellerMetadata(): Metadata {
 export function getContactMetadata(): Metadata {
   return constructMetadata({
     title: "Contact Hive | Fashion Delivery Support in Kochi & Ernakulam",
-    description: "Get in touch with the Hive team. We're here to support customers and boutique partners across Kochi and Ernakulam, Kerala.",
+    description: "Get in touch with the Hive team. We're here to support customers and retail partners across Kochi and Ernakulam, Kerala.",
     path: "/contact",
   });
 }

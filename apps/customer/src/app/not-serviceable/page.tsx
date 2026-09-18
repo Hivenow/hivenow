@@ -26,7 +26,7 @@ export default function NotServiceablePage() {
             No products are currently deliverable to your location
           </h1>
           <p className="text-sm text-hive-text-muted leading-relaxed max-w-sm mx-auto font-medium">
-            Hive delivers items within boutique-specific delivery radiuses. Please change your location or browse all available products.
+            Hive delivers items within store-specific delivery radiuses. Please change your location or browse all available products.
           </p>
         </div>
 

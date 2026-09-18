@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "About Hive | Fashion Shouldn't Have to Wait",
     description:
-      "Kochi's first fashion platform built for 90-minute delivery. Discover curated brands and designers delivered to your door today.",
+      "Kochi's first fashion platform built for 90-minute delivery. Discover top brands and designers delivered to your door today.",
     url: `${SITE_URL}/about`,
     siteName: "Hive",
     type: "website",

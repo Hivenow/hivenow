@@ -705,7 +705,7 @@ function OverviewTab({
                     <OrderStatusBadge status={mapOrderStatus(activeOrder.status)} />
                   </div>
                   <h4 className="text-sm font-sans font-semibold text-stone-900 truncate">
-                    {activeOrder.items?.[0]?.productName || "Boutique Order"}
+                    {activeOrder.items?.[0]?.productName || "Store Order"}
                     {activeOrder.items?.length > 1 && (
                       <span className="text-xs text-stone-500 font-sans font-medium">
                         {" "}
@@ -771,7 +771,7 @@ function OverviewTab({
       {/* ── UPCOMING RESERVATION PREVIEW (If Any) ── */}
       {upcomingReservation && (
         <section className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500">Boutique Reservation</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500">Store Reservation</h3>
           <ReservationStatusCard reservation={upcomingReservation} />
         </section>
       )}
@@ -963,7 +963,7 @@ function ReservationsTab({ reservations }: { reservations: any[] | undefined }) 
   return (
     <div className="flex flex-col gap-6 text-left animate-fadeIn">
       <div className="border-b border-stone-200/80 pb-4">
-        <h2 className="text-xl font-serif font-medium text-stone-900">Boutique Reservations</h2>
+        <h2 className="text-xl font-serif font-medium text-stone-900">Store Reservations</h2>
         <p className="text-xs text-stone-500 mt-0.5">In-store try-on bookings and fitting holds.</p>
       </div>
 
@@ -978,7 +978,7 @@ function ReservationsTab({ reservations }: { reservations: any[] | undefined }) 
           </div>
           <p className="font-serif font-medium text-stone-900">No active reservations</p>
           <p className="text-xs text-stone-500 max-w-xs leading-relaxed">
-            Reserve pieces online to try on in person at verified Kochi boutiques.
+            Reserve pieces online to try on in person at local Kochi stores.
           </p>
         </div>
       ) : (

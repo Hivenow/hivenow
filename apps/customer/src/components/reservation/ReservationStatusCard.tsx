@@ -28,7 +28,7 @@ export const ReservationStatusCard: React.FC<ReservationStatusCardProps> = ({ re
               <span className="text-sm font-bold">Awaiting Seller Acceptance</span>
             </div>
             <p className="text-xs text-stone-600">
-              The boutique will confirm availability {reservation.scheduledConfirmDate ? `on ${reservation.scheduledConfirmDate}` : "tomorrow"}. You&apos;ll receive a WhatsApp message once accepted!
+              The store will confirm availability {reservation.scheduledConfirmDate ? `on ${reservation.scheduledConfirmDate}` : "tomorrow"}. You&apos;ll receive a WhatsApp message once accepted!
             </p>
           </div>
         );
@@ -79,7 +79,7 @@ export const ReservationStatusCard: React.FC<ReservationStatusCardProps> = ({ re
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span className="text-sm font-bold">Order Confirmed</span>
             </div>
-            <p className="text-xs text-stone-600">Your payment was successful and the boutique is processing your order.</p>
+            <p className="text-xs text-stone-600">Your payment was successful and the store is processing your order.</p>
           </div>
         );
       case "payment_expired":

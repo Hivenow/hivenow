@@ -23,7 +23,7 @@ export function BecomeSellerCTA() {
             <Store className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white mb-4">
-            Own a boutique in Ernakulam?
+            Own a fashion brand or store in Ernakulam?
           </h2>
           <p className="text-stone-300 mb-8 leading-relaxed max-w-lg">
             Join Hive to reach thousands of local customers. Offer same-day delivery and grow your fashion business with zero upfront costs.

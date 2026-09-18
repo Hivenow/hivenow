@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const title = slug.replace(/-/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
   const canonicalUrl = `${SITE_URL}/experiences/${slug}`;
-  const description = `Explore the ${title} editorial experience. Discover curated boutique collections, trends, and stories in Kochi on Hive.`;
+  const description = `Explore the ${title} editorial experience. Discover fashion collections, trends, and stories in Kochi on Hive.`;
 
   return {
     // The root layout appends " | Hive"; carrying one here doubled it. openGraph and twitter

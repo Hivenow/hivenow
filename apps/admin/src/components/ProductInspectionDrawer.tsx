@@ -327,9 +327,17 @@ export function ProductInspectionDrawer({
                   {product?.approvalStatus || "Pending"}
                 </span>
               </div>
-              <p className="text-[10px] text-hive-text-muted font-medium truncate">
-                Uploaded by {product?.boutiqueName}
-              </p>
+              <div className="text-[10px] text-hive-text-muted font-medium truncate flex items-center gap-1.5 flex-wrap">
+                <span>Store: <strong className="text-slate-700">{product?.boutiqueName}</strong></span>
+                <span>•</span>
+                <span>Added: <strong className="text-slate-700">{product?.createdAt ? new Date(product.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</strong></span>
+                {product?.approvedAt && (
+                  <>
+                    <span>•</span>
+                    <span className="text-emerald-700 font-semibold">Approved: {new Date(product.approvedAt).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

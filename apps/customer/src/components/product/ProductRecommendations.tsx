@@ -131,9 +131,6 @@ export const ProductRecommendations: React.FC<ProductRecommendationsProps> = ({
   return (
     <div className="w-full border-t border-hive-border/40 pt-12 mt-12 text-left">
       <div className="flex flex-col gap-1 mb-6">
-        <span className="text-[10px] font-extrabold text-hive-amber uppercase tracking-[0.25em]">
-          Picked for you
-        </span>
         <h2 className="text-xl md:text-2xl font-serif font-extrabold text-hive-dark">
           You might also like
         </h2>
@@ -156,7 +153,7 @@ export const ProductRecommendations: React.FC<ProductRecommendationsProps> = ({
           isOpen={quickViewModal.open}
           onClose={() => setQuickViewModal({ open: false, productId: null })}
           productSlug={quickViewModal.productId}
-          initialProduct={products.find(p => p.slug === quickViewModal.productId)}
+          initialProduct={products.find((p: any) => p.slug === quickViewModal.productId)}
         />
       )}
     </div>

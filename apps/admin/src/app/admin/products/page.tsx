@@ -29,7 +29,9 @@ import {
   XCircle,
   Info,
   Trash2,
-  Crop
+  Crop,
+  Clock,
+  Calendar
 } from "lucide-react";
 
 const MODERATION_CATEGORIES = [
@@ -223,6 +225,32 @@ export default function AdminProductsPage() {
 
   function formatCurrency(paise: number) {
     return "₹" + (paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  }
+
+  function formatTimestamp(ts?: number) {
+    if (!ts) return "—";
+    return new Date(ts).toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function formatRelativeTime(ts?: number) {
+    if (!ts) return "";
+    const diffMs = Date.now() - ts;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHr / 24);
+
+    if (diffDays > 30) return new Date(ts).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHr > 0) return `${diffHr}h ago`;
+    if (diffMin > 0) return `${diffMin}m ago`;
+    return "just now";
   }
 
   if (boutiques === undefined || products === undefined) {
@@ -526,6 +554,31 @@ export default function AdminProductsPage() {
                           </button>
                           <span className="font-mono text-[9px] text-hive-text-muted truncate select-all">{prod._id}</span>
                           <span className="text-[10px] text-slate-500 font-medium">Category: {prod.categoryName}</span>
+
+                          {/* Lifecycle Timestamps */}
+                          <div className="flex flex-col gap-0.5 mt-1 pt-1.5 border-t border-slate-100 text-[10px] text-slate-500 font-medium">
+                            <span className="flex items-center gap-1 text-slate-600" title={`Added on ${formatTimestamp(prod.createdAt)}`}>
+                              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span>Added {formatRelativeTime(prod.createdAt)}</span>
+                              <span className="text-[9px] text-slate-400">({formatTimestamp(prod.createdAt)})</span>
+                            </span>
+                            {prod.approvedAt ? (
+                              <span className="flex items-center gap-1 text-emerald-700 font-semibold" title={`Approved on ${formatTimestamp(prod.approvedAt)}`}>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>Approved {formatRelativeTime(prod.approvedAt)}</span>
+                              </span>
+                            ) : prod.approvalStatus === "pending" ? (
+                              <span className="flex items-center gap-1 text-amber-700 font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                                <span>Awaiting approval ({formatRelativeTime(prod.createdAt)})</span>
+                              </span>
+                            ) : null}
+                            {prod.updatedAt && prod.updatedAt - prod.createdAt > 60000 && (
+                              <span className="text-[9px] text-slate-400 italic">
+                                Edited {formatRelativeTime(prod.updatedAt)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -592,8 +645,11 @@ export default function AdminProductsPage() {
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1.5 items-start">
                           {prod.active && (
-                            <span className="inline-flex px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border bg-[#C59A5B]/10 text-[#C59A5B] border-[#C59A5B]/20">
-                              Active
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border bg-[#C59A5B]/10 text-[#C59A5B] border-[#C59A5B]/20">
+                              <span>Active</span>
+                              {prod.approvedAt && (
+                                <span className="text-[8.5px] font-medium opacity-80">· {formatRelativeTime(prod.approvedAt)}</span>
+                              )}
                             </span>
                           )}
 
@@ -966,10 +1022,57 @@ export default function AdminProductsPage() {
                   <p className="text-xs text-hive-text-muted font-mono mt-1 select-all">{historyProduct._id}</p>
                 </div>
                 <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1 mt-2 font-sans">
-                  <span>Boutique: <strong className="text-hive-dark">{historyProduct.boutiqueName}</strong></span>
+                  <span>Store: <strong className="text-hive-dark">{historyProduct.boutiqueName}</strong></span>
                   <span>Category: <strong className="text-hive-dark">{historyProduct.categoryName}</strong></span>
                   <span>Price: <strong className="text-hive-dark">{formatCurrency(historyProduct.price)}</strong></span>
                 </div>
+              </div>
+            </div>
+
+            {/* Lifecycle Timestamps Summary Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200/70 rounded-2xl font-sans">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-400" /> Uploaded / Added
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  {formatTimestamp(historyProduct.createdAt)}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {formatRelativeTime(historyProduct.createdAt)}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-slate-400" /> Approval Status
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  {historyProduct.approvalStatus === "approved"
+                    ? "Approved"
+                    : historyProduct.approvalStatus === "changes_requested"
+                    ? "Changes Requested"
+                    : "Pending Approval"}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {historyProduct.approvedAt
+                    ? `Approved on ${formatTimestamp(historyProduct.approvedAt)}`
+                    : historyProduct.approvalStatus === "pending"
+                    ? `In queue for ${formatRelativeTime(historyProduct.createdAt)}`
+                    : "Review in progress"}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-slate-400" /> Last Modified
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  {formatTimestamp(historyProduct.updatedAt)}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {formatRelativeTime(historyProduct.updatedAt)}
+                </span>
               </div>
             </div>
 
@@ -1030,10 +1133,15 @@ export default function AdminProductsPage() {
               ) : (
                 <div className="relative pl-6 border-l-2 border-slate-100 space-y-6 ml-3">
                   {moderationHistory.map((log: any) => {
+                    const isCreated = log.action === "product.created";
+                    const isApproved = log.action === "product.approve";
+                    const isChangesRequested = log.action === "product.request_changes";
                     const isModeration = log.action === "product.moderated";
                     const isUnmoderated = log.action === "product.unmoderated";
                     const isDeactivated = log.action === "product.deactivated_admin";
                     const isReactivated = log.action === "product.reactivated_admin";
+                    const isUpdated = log.action === "product.updated_admin";
+                    const isImageReplaced = log.action === "product.image_replaced_admin";
                     
                     const meta = log.metadata ? JSON.parse(log.metadata) : {};
 
@@ -1042,12 +1150,18 @@ export default function AdminProductsPage() {
                         {/* Timeline Node Point */}
                         <span className={cn(
                           "absolute -left-[33px] top-0.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center",
+                          isCreated ? "border-slate-500" :
+                          isApproved ? "border-emerald-500" :
+                          isChangesRequested ? "border-orange-500" :
                           isModeration ? "border-red-500" :
                           isDeactivated ? "border-amber-500" :
                           isUnmoderated ? "border-green-500" : "border-blue-500"
                         )}>
                           <span className={cn(
                             "w-1.5 h-1.5 rounded-full",
+                            isCreated ? "bg-slate-500" :
+                            isApproved ? "bg-emerald-500" :
+                            isChangesRequested ? "bg-orange-500" :
                             isModeration ? "bg-red-500" :
                             isDeactivated ? "bg-amber-500" :
                             isUnmoderated ? "bg-green-500" : "bg-blue-500"
@@ -1058,10 +1172,15 @@ export default function AdminProductsPage() {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center justify-between gap-4 font-sans">
                             <span className="text-xs font-extrabold uppercase tracking-wide text-slate-800">
-                              {isModeration ? "Moderated (Hidden)" :
-                               isUnmoderated ? "Moderation Lifted" :
-                               isDeactivated ? "Force Deactivated" :
-                               isReactivated ? "Reactivated" : log.action}
+                              {isCreated ? "Product Uploaded by Store" :
+                               isApproved ? "Listing Approved (Live on Storefront)" :
+                               isChangesRequested ? "Changes Requested by Admin" :
+                               isModeration ? "Moderated (Hidden from Storefront)" :
+                               isUnmoderated ? "Moderation Lifted (Restored)" :
+                               isDeactivated ? "Force Deactivated by Admin" :
+                               isReactivated ? "Reactivated by Admin" :
+                               isUpdated ? "Product Details Edited by Admin" :
+                               isImageReplaced ? "Product Image Replaced / Cropped" : log.action}
                             </span>
                             <span className="text-[10px] font-bold text-slate-400">
                               {new Date(log.createdAt).toLocaleString("en-IN", {
@@ -1075,8 +1194,18 @@ export default function AdminProductsPage() {
                           </div>
                           
                           <div className="text-[11px] text-slate-500 font-medium">
-                            Action by: <strong className="text-slate-700">{log.actorEmail}</strong>
+                            {isCreated ? (
+                              <span>Source: <strong className="text-slate-700">{log.actorEmail}</strong></span>
+                            ) : (
+                              <span>Action by: <strong className="text-slate-700">{log.actorEmail}</strong></span>
+                            )}
                           </div>
+
+                          {meta.notes && (
+                            <div className="mt-1 p-2 bg-orange-50 border border-orange-200 rounded-xl text-xs font-semibold text-orange-850 select-text">
+                              Changes Requested: &quot;{meta.notes}&quot;
+                            </div>
+                          )}
 
                           {meta.category && (
                             <div className="text-[10px] text-red-600 font-bold uppercase tracking-wider mt-0.5">

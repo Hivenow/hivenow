@@ -200,6 +200,9 @@ export const getAdminProducts = query({
 
       enriched.push({
         ...p,
+        createdAt: p.createdAt ?? p._creationTime,
+        approvedAt: p.approvedAt,
+        updatedAt: p.updatedAt ?? p.createdAt ?? p._creationTime,
         images: imageUrls,
         imageUrl,
         imageUrls,
@@ -237,7 +240,7 @@ export const getAdminProducts = query({
         enriched = enriched.filter(p => p.totalStock === 0);
       } else if (args.status === "recently_created") {
         const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        enriched = enriched.filter(p => p.createdAt >= sevenDaysAgo);
+        enriched = enriched.filter(p => (p.createdAt ?? p._creationTime) >= sevenDaysAgo);
       } else if (args.status === "moderated") {
         enriched = enriched.filter(p => p.adminHidden === true);
       } else if (args.status === "needs_review") {
@@ -552,6 +555,8 @@ export const getProductModerationHistory = query({
   handler: async (ctx, args) => {
     await requireRole(ctx, "admin");
 
+    const product = await ctx.db.get(args.productId);
+
     const logs = await ctx.db
       .query("auditLogs")
       .withIndex("by_entityType_entityId", (q) =>
@@ -559,21 +564,22 @@ export const getProductModerationHistory = query({
       )
       .collect();
 
-    // Filter to moderation/activation actions
-    const moderationActions = [
+    // Filter to all product lifecycle actions
+    const lifecycleActions = [
+      "product.approve",
+      "product.request_changes",
       "product.moderated",
       "product.unmoderated",
       "product.deactivated_admin",
       "product.reactivated_admin",
+      "product.updated_admin",
+      "product.image_replaced_admin",
     ];
 
-    const filteredLogs = logs.filter((log) => moderationActions.includes(log.action));
-
-    // Sort by createdAt descending (newest first)
-    filteredLogs.sort((a, b) => b.createdAt - a.createdAt);
+    const filteredLogs = logs.filter((log) => lifecycleActions.includes(log.action));
 
     // Enrich with actor email
-    return await Promise.all(
+    const enrichedLogs: any[] = await Promise.all(
       filteredLogs.map(async (log) => {
         let actorEmail = "System";
         if (log.actorId) {
@@ -588,6 +594,33 @@ export const getProductModerationHistory = query({
         };
       })
     );
+
+    // Ensure the initial product upload/creation event is always present in the timeline
+    if (product) {
+      const initialUploadTime = product.createdAt ?? product._creationTime;
+      const boutique = await ctx.db.get(product.boutiqueId);
+      const storeName = (boutique as any)?.boutiqueName || (boutique as any)?.name || "Store";
+      enrichedLogs.push({
+        _id: `synthetic-create-${product._id}` as any,
+        _creationTime: initialUploadTime,
+        actorRole: "merchant",
+        action: "product.created",
+        entityType: "products",
+        entityId: product._id,
+        metadata: JSON.stringify({
+          productName: product.name,
+          boutiqueName: storeName,
+          category: product.categoryId,
+        }),
+        createdAt: initialUploadTime,
+        actorEmail: `${storeName} (Merchant)`,
+      });
+    }
+
+    // Sort by createdAt descending (newest first)
+    enrichedLogs.sort((a, b) => b.createdAt - a.createdAt);
+
+    return enrichedLogs;
   },
 });
 

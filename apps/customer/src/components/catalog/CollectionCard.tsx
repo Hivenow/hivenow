@@ -71,7 +71,7 @@ export const CollectionCard: React.FC<CollectionCardProps> = ({
 
   const styleCount = typeof collection.productCount === "number" && collection.productCount > 0 
     ? `${collection.productCount} styles` 
-    : "Curated styles";
+    : "Styles available";
 
   const storeLocality = collection.locality || "Kochi Stores";
 

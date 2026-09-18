@@ -1042,7 +1042,7 @@ export const Navbar: React.FC = () => {
               {subcategories.length > 0 && (
                 <div className="flex flex-col gap-3 text-left">
                   <span className="text-[11px] uppercase tracking-wider text-stone-400 font-bold">
-                    Curated Categories
+                    Browse Categories
                   </span>
                   <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none pl-1">
                     {subcategories.map((subcat: any) => (

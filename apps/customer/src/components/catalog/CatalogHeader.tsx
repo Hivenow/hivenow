@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import { useLocation } from "@/context/LocationContext";
 
 export interface CatalogHeaderProps {
@@ -27,14 +28,14 @@ export const CatalogHeader: React.FC<CatalogHeaderProps> = ({
       
       <div className="max-w-[1440px] mx-auto px-6 lg:px-12 w-full flex flex-col md:flex-row md:items-end md:justify-between gap-6 relative">
         <div className="flex-1 max-w-2xl">
-          {/* Eyebrow or accent badge */}
-          <div className="flex items-center gap-2 mb-3">
-            <span 
-              className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse"
-              style={{ backgroundColor: accentColor }}
-            />
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.25em] text-hive-text-muted">
-              CURATED COLLECTION
+          {/* Breadcrumb / category eyebrow */}
+          <div className="flex items-center gap-1.5 text-xs text-hive-text-muted mb-3 font-medium">
+            <Link href="/products" className="hover:text-hive-dark transition-colors">
+              Shop
+            </Link>
+            <span className="text-stone-300">/</span>
+            <span className="text-hive-dark font-semibold truncate">
+              {title}
             </span>
           </div>
 

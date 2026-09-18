@@ -299,7 +299,7 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
               Pieces Arriving Soon
             </h3>
             <p className="text-xs text-stone-500 mt-1.5 max-w-md leading-relaxed font-normal">
-              We are currently curating new styles for this category in {locality || city || "Kochi"}.
+              New styles are arriving soon from local brands and stores in {locality || city || "Kochi"}.
             </p>
             {onResetFilter ? (
               <button

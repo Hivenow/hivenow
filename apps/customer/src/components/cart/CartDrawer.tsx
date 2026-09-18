@@ -70,7 +70,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
             <h2 className="font-serif text-lg font-semibold text-stone-900 leading-snug">Hive Bag</h2>
             {count > 0 && (
               <span className="text-[11px] text-stone-500 font-normal mt-0.5">
-                {count} {count === 1 ? "curated piece" : "curated pieces"}
+                {count} {count === 1 ? "item" : "items"}
               </span>
             )}
           </div>

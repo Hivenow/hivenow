@@ -176,7 +176,7 @@ export function MobileProductDetails({
 
         {/* Fulfillment line */}
         <div className="text-xs text-stone-500 font-medium pt-0.5 leading-none">
-          Fulfilled by a Verified Hive Partner
+          Dispatched directly from store
         </div>
       </div>
 

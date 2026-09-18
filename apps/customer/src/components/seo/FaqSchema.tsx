@@ -10,7 +10,7 @@ export function FaqSchema() {
         "name": "What is Hive (HiveNow)?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Hive (hivenow.in) is a hyperlocal fashion marketplace based in Kochi, Kerala, India. It lets shoppers discover and buy fashion products from local boutiques, brands and designers across Kochi and Ernakulam and get them delivered in 90 minutes. Hive is operated by Beelyn LLP."
+          "text": "Hive (hivenow.in) is a hyperlocal fashion marketplace based in Kochi, Kerala, India. It lets shoppers discover and buy fashion products from local brands, designers and fashion stores across Kochi and Ernakulam and get them delivered in 90 minutes. Hive is operated by Beelyn LLP."
         }
       },
       {
@@ -18,7 +18,7 @@ export function FaqSchema() {
         "name": "Can I get fashion delivered in 90 minutes in Kochi?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Hive offers fashion delivery in approximately 90 minutes across Kochi and Ernakulam. You can shop kurtis, dresses, shirts, jeans, footwear, sarees, accessories and more from local fashion boutiques and get them delivered directly to your door."
+          "text": "Yes. Hive offers fashion delivery in approximately 90 minutes across Kochi and Ernakulam. You can shop kurtis, dresses, shirts, jeans, footwear, sarees, accessories and more from local fashion brands and stores and get them delivered directly to your door."
         }
       },
       {
@@ -26,7 +26,7 @@ export function FaqSchema() {
         "name": "Which is the fastest fashion delivery app in Kochi?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Hive is a leading fashion delivery platform in Kochi, offering delivery of outfits, dresses, and clothing from local boutiques in approximately 90 minutes across Ernakulam, Kakkanad, Edappally, Panampilly Nagar and other areas."
+          "text": "Hive is a leading fashion delivery platform in Kochi, offering delivery of outfits, dresses, and clothing from local stores in approximately 90 minutes across Ernakulam, Kakkanad, Edappally, Panampilly Nagar and other areas."
         }
       },
       {

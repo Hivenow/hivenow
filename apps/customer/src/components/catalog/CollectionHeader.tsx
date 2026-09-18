@@ -18,7 +18,7 @@ export const CollectionHeader: React.FC<CollectionHeaderProps> = ({
   details,
   title,
 }) => {
-  const headerTitle = title || details?.title || "Curated Collection";
+  const headerTitle = title || details?.title || "Collection";
 
   return (
     <div className="w-full bg-[#FAF8F5] border-b border-stone-200/60 py-8 sm:py-10 lg:py-12 select-none">

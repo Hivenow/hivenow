@@ -140,7 +140,7 @@ export function CollectionsIndexClient() {
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-stone-900">
         <Loader2 className="w-6 h-6 text-amber-600/80 dark:text-amber-400 animate-spin" strokeWidth={1.75} />
         <p className="font-serif italic text-sm text-stone-500 animate-pulse">
-          Curating lookbooks near you...
+          Loading collections near you...
         </p>
       </div>
     );
@@ -161,7 +161,7 @@ export function CollectionsIndexClient() {
                 <span className="text-stone-500 font-medium">90 Mins</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-serif font-bold text-stone-950 tracking-tight">
-                Curated Lookbooks
+                Featured Collections
               </h1>
             </div>
 
@@ -182,7 +182,7 @@ export function CollectionsIndexClient() {
             </div>
             <div className="flex items-center gap-1">
               <Store className="w-3 h-3 text-amber-600" />
-              <span>Nearby Boutique Stores</span>
+              <span>Nearby Stores</span>
             </div>
             <div className="flex items-center gap-1">
               <ShieldCheck className="w-3 h-3 text-amber-600" />

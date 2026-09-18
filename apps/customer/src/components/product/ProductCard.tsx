@@ -231,7 +231,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onQuickView, 
               : (darkTheme ? "text-amber-400/80 hover:text-amber-300 font-medium" : "text-stone-400 hover:text-stone-600 font-medium")
           )}
         >
-          {product.boutiqueName || boutique?.name || boutique?.boutiqueName || "Hive Boutique"}
+          {product.boutiqueName || boutique?.name || boutique?.boutiqueName || "Hive Store"}
         </Link>
 
         {/* Product Title */}

@@ -74,7 +74,7 @@ export default function WishlistPage() {
                   Save what you love
                 </h2>
                 <p className="text-xs sm:text-sm text-stone-500 leading-relaxed font-normal">
-                  Your wishlist is empty. Explore curated styles from Kochi&apos;s finest boutiques and save the pieces you love.
+                  Your wishlist is empty. Explore styles from Kochi&apos;s finest brands and stores and save items to shop later.
                 </p>
               </div>
 

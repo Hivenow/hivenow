@@ -17,12 +17,12 @@ import {
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "The Hive Journal | Kochi Fashion, Fabrics & Boutique Style Guides",
+  title: "The Hive Journal | Kochi Fashion, Fabrics & Store Style Guides",
   description:
-    "Explore curated fashion guides, Kerala climate fabric advice, handloom saree heritage, and boutique styling tips from Kochi's independent design studios.",
+    "Explore curated fashion guides, Kerala climate fabric advice, handloom saree heritage, and styling tips from Kochi's independent design studios.",
   keywords: [
     "Kochi fashion blog",
-    "Kerala boutique styling",
+    "Kerala fashion styling",
     "cotton kurtis guide",
     "saree draping tips",
     "Panampilly Nagar shopping guide",
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
     canonical: `${SITE_URL}/blog`,
   },
   openGraph: {
-    title: "The Hive Journal | Stories & Boutique Style Guides",
+    title: "The Hive Journal | Stories & Store Style Guides",
     description:
-      "Expert advice on shopping local showrooms online, choosing breathable fabrics for Kerala weather, and finding exact fits from Kochi boutiques.",
+      "Expert advice on shopping local showrooms online, choosing breathable fabrics for Kerala weather, and finding exact fits from Kochi stores.",
     url: `${SITE_URL}/blog`,
     siteName: "Hive Marketplace",
     type: "website",
@@ -118,7 +118,7 @@ export default async function BlogDirectoryPage() {
           Stories, Style & Kerala Fabric Guides
         </h1>
         <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed">
-          Expert styling advice, climate-friendly fabric secrets, and inside looks at independent boutique showrooms across Kochi.
+          Expert styling advice, climate-friendly fabric secrets, and inside looks at independent fashion stores across Kochi.
         </p>
 
         {/* Category Navigation Chips */}
@@ -267,7 +267,7 @@ export default async function BlogDirectoryPage() {
           </div>
         </div>
 
-        {/* 4. Showroom Discovery & Boutique Concierge Hub */}
+        {/* 4. Showroom Discovery & Store Concierge Hub */}
         <div className="rounded-3xl bg-slate-950 text-white p-8 sm:p-12 relative overflow-hidden shadow-2xl border border-slate-800">
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
           
@@ -279,11 +279,11 @@ export default async function BlogDirectoryPage() {
               </div>
 
               <h3 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-black tracking-tight text-white leading-tight">
-                Discover Kochi&apos;s Finest Independent Boutiques
+                Discover Kochi&apos;s Finest Independent Brands &amp; Stores
               </h3>
 
               <p className="mt-3 text-sm sm:text-base text-slate-300 max-w-2xl leading-relaxed">
-                Connect directly with designer boutiques in Panampilly Nagar, Edappally, MG Road, Kakkanad, and Fort Kochi. Browse live showroom racks with transparent pricing and receive orders at your door in hours.
+                Connect directly with fashion brands and stores in Panampilly Nagar, Edappally, MG Road, Kakkanad, and Fort Kochi. Browse live showroom racks with transparent pricing and receive orders at your door in hours.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -309,7 +309,7 @@ export default async function BlogDirectoryPage() {
                 href="/become-seller"
                 className="text-xs text-slate-400 hover:text-amber-300 transition-colors underline underline-offset-4"
               >
-                Are you a Kochi boutique owner? Partner with us
+                Are you a Kochi store or brand owner? Partner with us
               </Link>
             </div>
           </div>

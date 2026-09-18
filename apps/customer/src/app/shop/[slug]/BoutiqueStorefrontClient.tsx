@@ -164,9 +164,8 @@ export function BoutiqueStorefrontClient({
               <h1 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 tracking-tight truncate">
                 {boutique.boutiqueName}
               </h1>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
-                <ShieldCheck className="w-3 h-3 text-amber-700" />
-                <span>Verified</span>
+              <span title="Verified Store">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" strokeWidth={2.5} />
               </span>
             </div>
             <div className="flex items-center gap-2.5 text-xs text-stone-500 font-medium flex-wrap">

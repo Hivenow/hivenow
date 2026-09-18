@@ -32,7 +32,7 @@ export function ProductSchema({ product }: ProductSchemaProps) {
     product.boutiqueName ||
     product.boutique?.boutiqueName ||
     product.boutique?.name ||
-    "Hive Boutique";
+    "Hive Store";
 
   const inStock = !product.isUnavailable && product.isAvailable !== false;
   const canonicalUrl = `${SITE_URL}/products/${product.slug}`;
@@ -43,7 +43,7 @@ export function ProductSchema({ product }: ProductSchemaProps) {
     name: product.name,
     description:
       product.description ||
-      `Buy ${product.name} from local boutique ${boutiqueName} in Kochi on Hive. Express 1-2 hour delivery available across Ernakulam.`,
+      `Buy ${product.name} from local store ${boutiqueName} in Kochi on Hive. Express 1-2 hour delivery available across Ernakulam.`,
     image: images,
     sku: product._id || product.slug,
     brand: {

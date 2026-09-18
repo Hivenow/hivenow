@@ -250,7 +250,7 @@ function SearchContent() {
             {/* Subtle Fallback Notice if no exact matches */}
             {isFallback && (
               <div className="py-2.5 px-3.5 bg-stone-100 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 font-medium flex items-center justify-between">
-                <span>No exact matches for &ldquo;<strong>{q}</strong>&rdquo;. Showing curated styles you may like:</span>
+                <span>No exact matches for &ldquo;<strong>{q}</strong>&rdquo;. Showing popular styles:</span>
                 <button
                   onClick={handleClear}
                   className="text-xs font-semibold text-stone-900 dark:text-white hover:underline ml-3 cursor-pointer shrink-0"

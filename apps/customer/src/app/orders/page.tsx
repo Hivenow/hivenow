@@ -231,7 +231,7 @@ export default function MyOrdersPage() {
         {sortedOrders.length === 0 ? (
           <EmptyState
             title="You haven't placed any orders yet"
-            description="Your curation journey is waiting. Explore unique, hand-crafted pieces from India's finest independent local designers."
+            description="Explore clothing and accessories from local brands and stores in Kochi with 90-minute delivery."
             icon={<Package className="w-6 h-6" />}
             action={{ label: "Shop Now", onClick: () => router.push("/products") }}
           />

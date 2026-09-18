@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const title = `${boutique.boutiqueName} — Store in ${city} | Shop Online on Hive`;
     const description =
       boutique.description ||
-      `Shop curated fashion from ${boutique.boutiqueName} in ${city}, Kerala. Kurtis, sarees, dresses & accessories delivered to your door in 90 minutes via Hive.`;
+      `Shop fashion from ${boutique.boutiqueName} in ${city}, Kerala. Kurtis, sarees, dresses & accessories delivered to your door in 90 minutes via Hive.`;
 
     const shareImage = boutique.bannerUrl || boutique.logoUrl || "/icon-512x512.png";
 
@@ -163,7 +163,7 @@ export default async function BoutiqueStorefrontPage({ params }: Props) {
     name: boutique.boutiqueName,
     description:
       boutique.description ||
-      `${boutique.boutiqueName} is a local boutique in ${city}, Kerala offering express fashion delivery via Hive.`,
+      `${boutique.boutiqueName} is a local fashion store in ${city}, Kerala offering express fashion delivery via Hive.`,
     url: `${SITE_URL}/shop/${slug}`,
     image: boutique.bannerUrl || boutique.logoUrl || `${SITE_URL}/icon-512x512.png`,
     priceRange: "₹₹",

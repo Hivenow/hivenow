@@ -110,7 +110,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const description = post.metaDescription || post.excerpt;
     const keywords = post.primaryKeyword
       ? [post.primaryKeyword, ...(post.secondaryKeywords || [])]
-      : ["Kochi fashion blog", "Kerala boutique styling", "Hyperlocal marketplace Kerala"];
+      : ["Kochi fashion blog", "Kerala fashion styling", "Hyperlocal marketplace Kerala"];
 
     const ogImage = post.coverImageUrl || defaultOgImage;
     const canonicalUrl = `${SITE_URL}/blog/${post.slug}`;
@@ -373,7 +373,7 @@ export default async function BlogPostPage({ params }: Props) {
             <div className="mx-8 sm:mx-12 my-8 p-6 sm:p-8 rounded-3xl bg-amber-50/70 border border-amber-200/80">
               <div className="flex items-center gap-2.5 text-amber-900 font-serif font-bold text-lg mb-4">
                 <CheckCircle2 className="w-6 h-6 text-amber-600" />
-                Actionable Tips for Online Boutique Shoppers
+                Actionable Tips for Online Shoppers
               </div>
               <ul className="space-y-3.5 pl-2">
                 {post.actionableTips.map((tip: string, index: number) => (
@@ -461,17 +461,17 @@ export default async function BlogPostPage({ params }: Props) {
                 Ready to Upgrade Your Wardrobe?
               </span>
               <h3 className="text-2xl sm:text-3xl font-serif font-black mt-3">
-                Explore Kochi&apos;s Top Independent Showrooms Today
+                Explore Kochi&apos;s Top Independent Brands &amp; Stores Today
               </h3>
               <p className="mt-2 text-sm text-slate-300 max-w-xl leading-relaxed">
-                Don&apos;t wait days for your next favorite outfit. Browse live collections from verified local boutiques and get same-day courier delivery to your doorstep.
+                Don&apos;t wait days for your next favorite outfit. Browse live collections from local fashion brands and stores and get same-day courier delivery to your doorstep.
               </p>
             </div>
             <Link
               href="/"
               className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-all shadow-lg hover:shadow-amber-400/20 shrink-0"
             >
-              <ShoppingBag className="w-4 h-4" /> Shop Live Boutiques
+              <ShoppingBag className="w-4 h-4" /> Shop Live Stores
             </Link>
           </div>
         </article>
@@ -571,7 +571,7 @@ export default async function BlogPostPage({ params }: Props) {
           <div className="mx-8 sm:mx-12 my-8 p-6 sm:p-8 rounded-3xl bg-amber-50/70 border border-amber-200/80">
             <div className="flex items-center gap-2.5 text-amber-900 font-serif font-bold text-lg mb-4">
               <CheckCircle2 className="w-6 h-6 text-amber-600" />
-              Actionable Tips for Online Boutique Shoppers
+              Actionable Tips for Online Shoppers
             </div>
             <ul className="space-y-3.5 pl-2">
               {blog.actionableTips.map((tip: string, index: number) => (
@@ -656,17 +656,17 @@ export default async function BlogPostPage({ params }: Props) {
               Ready to Upgrade Your Wardrobe?
             </span>
             <h3 className="text-2xl sm:text-3xl font-serif font-black mt-3">
-              Explore Kochi&apos;s Top Independent Showrooms Today
+              Explore Kochi&apos;s Top Independent Brands &amp; Stores Today
             </h3>
             <p className="mt-2 text-sm text-slate-300 max-w-xl leading-relaxed">
-              Don&apos;t wait days for your next favorite outfit. Browse live collections from verified local boutiques and get same-day courier delivery to your doorstep.
+              Don&apos;t wait days for your next favorite outfit. Browse live collections from local fashion brands and stores and get same-day courier delivery to your doorstep.
             </p>
           </div>
           <Link
             href="/"
             className="inline-flex items-center gap-2 px-6 py-4 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-sm transition-all shadow-lg hover:shadow-amber-400/20 shrink-0"
           >
-            <ShoppingBag className="w-4 h-4" /> Shop Live Boutiques
+            <ShoppingBag className="w-4 h-4" /> Shop Live Stores
           </Link>
         </div>
       </article>

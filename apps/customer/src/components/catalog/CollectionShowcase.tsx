@@ -103,7 +103,7 @@ export const CollectionShowcase: React.FC<CollectionShowcaseProps> = ({
                 className="text-[10px] font-extrabold uppercase tracking-[0.22em]"
                 style={{ color: details.accentColor }}
               >
-                Curated By
+                Available At
               </span>
               <h2 className="text-xl font-serif font-extrabold text-hive-dark">
                 Featured Stores

@@ -55,9 +55,9 @@ export function BecomeSellerClient() {
     let err = "";
     if (name === "boutiqueName") {
       if (!value.trim()) {
-        err = "Boutique name is required.";
+        err = "Store / Brand name is required.";
       } else if (value.trim().length < 3) {
-        err = "Boutique name must be at least 3 characters.";
+        err = "Store / Brand name must be at least 3 characters.";
       }
     } else if (name === "sellerModel") {
       if (!value) err = "Seller model is required.";
@@ -256,7 +256,7 @@ export function BecomeSellerClient() {
     // Formatting model display
     const formatModel = (mdl: string) => {
       const mapping: Record<string, string> = {
-        boutique: "Boutique Store",
+        boutique: "Retail Store",
         brand: "Independent Brand",
         multi_brand_store: "Multi-brand Store"
       };

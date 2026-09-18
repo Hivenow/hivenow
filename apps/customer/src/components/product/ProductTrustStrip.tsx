@@ -101,7 +101,7 @@ export const ProductTrustStrip: React.FC<ProductTrustStripProps> = ({
       icon: RefreshCw,
       title: returnsAccepted ? "1-Day Easy Returns" : "Final Sale",
       description: returnsAccepted
-        ? "Return request accepted within 24 hours of delivery according to seller boutique policy."
+        ? "Return request accepted within 24 hours of delivery according to store policy."
         : "Final sale item. Wrong, damaged, defective, or stained items covered by Hive Guarantee.",
       show: true,
     },

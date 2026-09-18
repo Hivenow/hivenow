@@ -142,7 +142,7 @@ export const LocationPermissionModal: React.FC = () => {
                 Hive is launching in <span className="text-hive-amber">Kochi!</span>
               </h3>
               <p className="text-xs text-slate-600 dark:text-neutral-350 max-w-[340px] mx-auto leading-relaxed font-semibold">
-                We deliver fashion from verified local boutiques in Kochi. Allow location access or pick your neighborhood to view available inventory.
+                We deliver fashion from local brands and stores across Kochi. Allow location access or pick your neighborhood to view available inventory.
               </p>
             </div>
 
@@ -152,7 +152,7 @@ export const LocationPermissionModal: React.FC = () => {
                 <div className="text-hive-amber p-1 bg-hive-amber/10 dark:bg-amber-950/40 rounded-lg">
                   <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
                 </div>
-                <span className="text-[10px] sm:text-[11px] font-extrabold text-stone-900 dark:text-white leading-tight">Verified boutiques</span>
+                <span className="text-[10px] sm:text-[11px] font-extrabold text-stone-900 dark:text-white leading-tight">Partner Stores</span>
                 <span className="text-[8px] sm:text-[9px] text-slate-500 dark:text-neutral-400 font-bold leading-none">Trusted local partners</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">

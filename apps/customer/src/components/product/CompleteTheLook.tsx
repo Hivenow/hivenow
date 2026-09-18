@@ -2,7 +2,7 @@
 import React from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
-import { ShoppingBag, Sparkles, ArrowRight } from "lucide-react";
+import { ShoppingBag, ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -27,7 +27,6 @@ export const CompleteTheLook: React.FC<StyledTogetherProps> = ({ productId }) =>
       </div>
     );
   }
-
   if (!recommendations || recommendations.length === 0) {
     return null;
   }
@@ -38,8 +37,8 @@ export const CompleteTheLook: React.FC<StyledTogetherProps> = ({ productId }) =>
       className="w-full border-t border-stone-200/80 pt-10 mt-10 text-left select-none"
     >
       <div className="flex flex-col gap-1 mb-6">
-        <span className="text-[10px] font-bold text-amber-700 uppercase tracking-[0.2em] flex items-center gap-1.5 select-none">
-          <Sparkles className="w-3.5 h-3.5 text-amber-600" /> CURATED FOR YOU
+        <span className="text-[10px] font-bold text-stone-500 uppercase tracking-[0.2em] select-none">
+          STYLE PAIRINGS
         </span>
         <h2 
           id="complete-the-look-title" 
@@ -48,13 +47,13 @@ export const CompleteTheLook: React.FC<StyledTogetherProps> = ({ productId }) =>
           Complete The Look
         </h2>
         <p className="text-xs text-stone-500 font-medium">
-          Coordinates and accessories curated by the partner
+          Matching pieces and accessories from this store
         </p>
       </div>
 
       {/* Horizontal scroll container with smaller cards */}
       <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none snap-x scroll-smooth -mx-6 px-6 sm:mx-0 sm:px-0">
-        {recommendations.map((item) => {
+        {recommendations.map((item: any) => {
           return (
             <Link 
               key={item._id} 

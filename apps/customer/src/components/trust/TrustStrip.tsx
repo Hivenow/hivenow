@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Zap, Sparkles, Headphones, ShieldCheck } from "lucide-react";
+import { Zap, Store, Headphones, ShieldCheck } from "lucide-react";
 
 const trustPillars = [
   {
@@ -10,9 +10,9 @@ const trustPillars = [
     subtitle: "Hyperlocal Kochi Dispatch",
   },
   {
-    icon: Sparkles,
-    title: "Curated Designers",
-    subtitle: "Verified Independent Labels",
+    icon: Store,
+    title: "Independent Brands",
+    subtitle: "Direct from Kochi Stores",
   },
   {
     icon: Headphones,

@@ -39,7 +39,7 @@ export function LocalBusinessSchema() {
       opens: "09:00",
       closes: "22:00",
     },
-    description: "Hyperlocal boutique fashion delivery service across Kochi and Ernakulam, partnering with top local designers.",
+    description: "Hyperlocal fashion delivery service across Kochi and Ernakulam, partnering with top local brands and stores.",
   };
 
   return (

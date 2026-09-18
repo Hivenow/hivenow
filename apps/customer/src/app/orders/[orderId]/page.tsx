@@ -568,7 +568,7 @@ export default function OrderDetailPage() {
                           </span>
                         </div>
                         <p className="text-[11px] text-stone-400 mt-1 truncate">
-                          Curated by {cleanedSeller || "Independent Designer"}
+                          Sold by {cleanedSeller || "Brand Store"}
                         </p>
                       </div>
                       <span className="text-sm font-mono font-bold text-stone-900 shrink-0 tabular-nums">
