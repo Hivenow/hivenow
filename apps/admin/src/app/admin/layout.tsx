@@ -46,6 +46,7 @@ const NAV_GROUPS = [
       { label: "Finance", href: "/admin/finance", icon: DollarSign },
       { label: "Settlements", href: "/admin/settlements", icon: Landmark },
       { label: "Payouts", href: "/admin/payouts", icon: CreditCard },
+      { label: "Payout Monitor", href: "/admin/payout-monitor", icon: ShieldAlert },
       { label: "Logistics", href: "/admin/logistics", icon: Truck },
       { label: "Serviceable Pincodes", href: "/admin/pincodes", icon: MapPin },
     ]

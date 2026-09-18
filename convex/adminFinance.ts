@@ -507,6 +507,8 @@ export const listPaidRouteOrdersInternal = internalQuery({
     return paid
       .filter((o) => (o.payoutProcessedAt ?? o._creationTime) >= since)
       .filter((o) => o.razorpayTransferId && o.transferStatus !== "reversed")
+      // Test-mode ids do not exist in live Razorpay; reconciling them only errors.
+      .filter((o) => !o.isTestData)
       // A chargeback may be holding this transfer on purpose; never release it.
       .filter((o) => o.disputeStatus !== "open" && o.disputeStatus !== "lost")
       .map((o) => ({

@@ -1027,6 +1027,10 @@ export default defineSchema({
     createdAt:            v.number(),
     updatedAt:            v.number(),
 
+    // Orders created while Razorpay ran in test mode. Their payment, transfer
+    // and refund ids do not exist in live mode, so every live job skips them.
+    isTestData: v.optional(v.boolean()),
+
     // Razorpay Route integration
     razorpayTransferId: v.optional(v.string()),
     transferStatus: v.optional(

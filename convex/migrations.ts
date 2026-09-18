@@ -1690,3 +1690,53 @@ export const repairFeelessProductPrices = internalMutation({
     };
   },
 });
+
+/**
+ * One-time before go-live: flag every order created while Razorpay ran in test mode.
+ *
+ * Their payment, transfer and refund ids only exist in the Razorpay test account,
+ * so once live keys are in place the reconcile cron and the Route transfer actions
+ * would keep calling live Razorpay with ids it has never seen. Flagged orders stay
+ * in the database and in reports; the money jobs just leave them alone.
+ *
+ * `beforeMs` defaults to now, which is what you want when running this in the
+ * minutes before switching the keys. Only paid orders are touched — an unpaid
+ * order has no Razorpay state to confuse anything.
+ *
+ *   npx convex run migrations:markTestModeOrders '{}' --prod
+ *   npx convex run migrations:markTestModeOrders '{"dryRun": false}' --prod
+ */
+export const markTestModeOrders = internalMutation({
+  args: { dryRun: v.optional(v.boolean()), beforeMs: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun !== false;
+    const cutoff = args.beforeMs ?? Date.now();
+
+    const orders = await ctx.db.query("orders").collect();
+    const targets = orders.filter(
+      (o) =>
+        o.createdAt < cutoff &&
+        !o.isTestData &&
+        (o.paymentStatus === "paid" || !!o.razorpayTransferId || !!o.payoutStatus)
+    );
+
+    let withTransferId = 0;
+    for (const order of targets) {
+      if (order.razorpayTransferId) withTransferId += 1;
+      if (!dryRun) {
+        await ctx.db.patch(order._id, { isTestData: true, updatedAt: Date.now() });
+      }
+    }
+
+    return {
+      dryRun,
+      cutoff,
+      scanned: orders.length,
+      marked: targets.length,
+      withTransferId,
+      alreadyMarked: orders.filter((o) => o.isTestData).length,
+      sample: targets.slice(0, 5).map((o) => o.orderNumber),
+      note: dryRun ? 'Dry run. Re-run with {"dryRun": false} to write.' : "Orders flagged as test data.",
+    };
+  },
+});

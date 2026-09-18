@@ -19,6 +19,7 @@ import type * as adminMerchants from "../adminMerchants.js";
 import type * as adminNotifications from "../adminNotifications.js";
 import type * as adminObservability from "../adminObservability.js";
 import type * as adminOrders from "../adminOrders.js";
+import type * as adminPayoutMonitor from "../adminPayoutMonitor.js";
 import type * as adminProducts from "../adminProducts.js";
 import type * as adminSettings from "../adminSettings.js";
 import type * as adminSweep from "../adminSweep.js";
@@ -215,6 +216,7 @@ declare const fullApi: ApiFromModules<{
   adminNotifications: typeof adminNotifications;
   adminObservability: typeof adminObservability;
   adminOrders: typeof adminOrders;
+  adminPayoutMonitor: typeof adminPayoutMonitor;
   adminProducts: typeof adminProducts;
   adminSettings: typeof adminSettings;
   adminSweep: typeof adminSweep;

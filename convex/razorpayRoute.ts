@@ -356,6 +356,13 @@ export const createHeldSellerTransfer = internalAction({
       return { success: false, reason: "order_not_found" };
     }
 
+    // Orders placed while Razorpay was in test mode carry test ids that do not
+    // exist in live mode; touching them from live jobs only produces errors.
+    if (order.isTestData) {
+      log("test_data_skipped");
+      return { success: true, reason: "test_data_skipped" };
+    }
+
     // ── Idempotency: a transfer already exists for this order ────────────────
     if (order.razorpayTransferId) {
       log("already_transferred", { transferId: order.razorpayTransferId });
@@ -549,6 +556,13 @@ export const updateTransferHold = internalAction({
       log("order_not_found");
       return { success: false, reason: "order_not_found" };
     }
+
+    // Orders placed while Razorpay was in test mode carry test ids that do not
+    // exist in live mode; touching them from live jobs only produces errors.
+    if (order.isTestData) {
+      log("test_data_skipped");
+      return { success: true, reason: "test_data_skipped" };
+    }
     if (!order.razorpayTransferId) {
       // No held transfer to adjust — the capture-time creation was skipped or
       // failed. The caller decides whether to fall back to creating one.
@@ -647,6 +661,13 @@ export const reverseSellerTransfer = internalAction({
     if (!order) {
       log("order_not_found");
       return { success: false, reason: "order_not_found" };
+    }
+
+    // Orders placed while Razorpay was in test mode carry test ids that do not
+    // exist in live mode; touching them from live jobs only produces errors.
+    if (order.isTestData) {
+      log("test_data_skipped");
+      return { success: true, reason: "test_data_skipped" };
     }
     if (!order.razorpayTransferId) {
       // Nothing was ever transferred (COD, or capture-time creation was skipped).
@@ -788,6 +809,13 @@ export const createSellerTransfer = internalAction({
     if (!order) {
       log("order_not_found");
       return { success: false, reason: "order_not_found" };
+    }
+
+    // Orders placed while Razorpay was in test mode carry test ids that do not
+    // exist in live mode; touching them from live jobs only produces errors.
+    if (order.isTestData) {
+      log("test_data_skipped");
+      return { success: true, reason: "test_data_skipped" };
     }
 
     // A transfer created after delivery must honour the same return window as
@@ -1036,7 +1064,7 @@ export const createSellerTransfer = internalAction({
  * The underlying action re-verifies with Razorpay before creating anything,
  * so this can never double-pay.
  */
-export const retrySellerTransfer: any = action({
+export const retrySellerTransfer = action({
   args: { orderId: v.id("orders") },
   handler: async (ctx, args): Promise<any> => {
     await ctx.runMutation((internal.orders as any).requirePayoutRetryPermission, {
