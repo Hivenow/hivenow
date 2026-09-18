@@ -37,14 +37,14 @@ export const CollectionHero: React.FC<CollectionHeroProps> = ({ details }) => {
           {/* Top bar: back link + eyebrow */}
           <div className="flex items-center justify-between">
             <Link
-              href="/collections"
+              href="/products"
               className="inline-flex items-center gap-2 text-white/70 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors group"
             >
               <ArrowLeft
                 className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5"
                 strokeWidth={2.5}
               />
-              All Collections
+              All Products
             </Link>
 
             {/* Collection eyebrow badge */}

@@ -76,7 +76,7 @@ export default async function CollectionPage({ params }: Props) {
       <BreadcrumbSchema
         items={[
           { name: "Home", url: "/" },
-          { name: "Collections", url: "/collections" },
+          { name: "Shop", url: "/products" },
           { name: data.collection.name, url: `/collections/${slug}` },
         ]}
       />

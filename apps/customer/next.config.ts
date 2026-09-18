@@ -142,6 +142,12 @@ const nextConfig: NextConfig = {
         destination: "/products/:slug*",
         permanent: true,
       },
+      // Redirect bare /collections index to /products (does not affect /collections/:slug)
+      {
+        source: "/collections",
+        destination: "/products",
+        permanent: false,
+      },
       // Correct legacy typo URLs to canonical /products/ethnic-wear
       {
         source: "/products/ethnic-wer",
