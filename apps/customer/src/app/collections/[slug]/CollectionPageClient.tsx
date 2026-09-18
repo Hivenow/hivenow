@@ -7,10 +7,16 @@ import { useLocation } from "@/context/LocationContext";
 import { toQueryCoords } from "@/lib/distance";
 import { ProductCard } from "@/components/product/ProductCard";
 import { CollectionHeader } from "@/components/catalog/CollectionHeader";
-import { LayoutGrid, Loader2 } from "lucide-react";
+import { CatalogLoadingState } from "@/components/catalog/CatalogLoadingState";
+import { LayoutGrid } from "lucide-react";
 import { mapDbProduct } from "@/components/home/ExperienceBlockRenderer";
 
-export function CollectionPageClient({ slug }: { slug: string }) {
+interface CollectionPageClientProps {
+  slug: string;
+  initialData?: any;
+}
+
+export function CollectionPageClient({ slug, initialData }: CollectionPageClientProps) {
   const { latitude, longitude, city } = useLocation();
 
   const data = useQuery(api.customerHome.getCollection, {
@@ -19,18 +25,21 @@ export function CollectionPageClient({ slug }: { slug: string }) {
     ...toQueryCoords(latitude, longitude),
   });
 
-  if (data === undefined) {
+  const effectiveData = data ?? initialData;
+
+  // Quick commerce instant skeleton loading
+  if (effectiveData === undefined) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-hive-dark">
-        <Loader2 className="w-7 h-7 text-amber-600/80 dark:text-amber-400 animate-spin" strokeWidth={1.75} />
-        <p className="font-serif italic text-lg text-hive-text-muted animate-pulse">
-          Curating your edit...
-        </p>
+      <div className="flex flex-col w-full bg-hive-cream min-h-screen">
+        <CollectionHeader title="Collection" />
+        <section className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-16">
+          <CatalogLoadingState count={8} />
+        </section>
       </div>
     );
   }
 
-  if (data === null) {
+  if (effectiveData === null) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-hive-dark">
         <LayoutGrid className="w-12 h-12 text-slate-300" />
@@ -42,7 +51,7 @@ export function CollectionPageClient({ slug }: { slug: string }) {
     );
   }
 
-  const { collection, products } = data;
+  const { collection, products } = effectiveData;
   const mappedProducts = products.map(mapDbProduct);
 
   return (

@@ -6,7 +6,8 @@ import { api } from "@convex/api";
 import { useLocation } from "@/context/LocationContext";
 import { toQueryCoords } from "@/lib/distance";
 import { ExperienceBlockRenderer } from "@/components/home/ExperienceBlockRenderer";
-import { Loader2, LayoutGrid } from "lucide-react";
+import { CatalogLoadingState } from "@/components/catalog/CatalogLoadingState";
+import { LayoutGrid } from "lucide-react";
 
 export function ExperiencePageClient({ slug }: { slug: string }) {
   const { latitude, longitude, city } = useLocation();
@@ -26,11 +27,8 @@ export function ExperiencePageClient({ slug }: { slug: string }) {
 
   if (experience === undefined) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-hive-dark">
-        <Loader2 className="w-7 h-7 text-amber-600/80 dark:text-amber-400 animate-spin" strokeWidth={1.75} />
-        <p className="font-serif italic text-lg text-hive-text-muted animate-pulse">
-          Loading experience...
-        </p>
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <CatalogLoadingState count={8} />
       </div>
     );
   }

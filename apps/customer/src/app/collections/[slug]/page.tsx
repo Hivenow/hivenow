@@ -80,7 +80,7 @@ export default async function CollectionPage({ params }: Props) {
           { name: data.collection.name, url: `/collections/${slug}` },
         ]}
       />
-      <CollectionPageClient slug={slug} />
+      <CollectionPageClient slug={slug} initialData={data} />
     </>
   );
 }

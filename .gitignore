@@ -77,3 +77,6 @@ HIVE_SYSTEM_ARCHITECTURE.md
 !**/public/**/*.jpg
 !**/public/**/*.jpeg
 .vercel
+
+# Local security scan output
+hive-nuclei.jsonl
