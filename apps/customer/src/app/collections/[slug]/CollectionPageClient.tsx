@@ -48,13 +48,7 @@ export function CollectionPageClient({ slug }: { slug: string }) {
   return (
     <div className="flex flex-col w-full bg-hive-cream">
       {/* ── Dynamic Header ── */}
-      <CollectionHeader
-        title={collection.name}
-        description={collection.description || `Hand-picked styles from verified boutiques.`}
-        productCount={products.length}
-        coverImage={collection.coverImage}
-        isVerified={true}
-      />
+      <CollectionHeader title={collection.name} />
 
       {/* ── Product Grid ── */}
       <section className="w-full max-w-[1440px] mx-auto px-6 lg:px-8 py-10 lg:py-16">
